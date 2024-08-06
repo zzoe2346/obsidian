@@ -1,0 +1,1526 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0"><channel><title><![CDATA[til]]></title><description><![CDATA[Obsidian digital garden]]></description><link>http://github.com/dylang/node-rss</link><image><url>lib/media/favicon.png</url><title>til</title><link></link></image><generator>Webpage HTML Export plugin for Obsidian</generator><lastBuildDate>Tue, 06 Aug 2024 13:15:55 GMT</lastBuildDate><atom:link href="lib/rss.xml" rel="self" type="application/rss+xml"/><pubDate>Tue, 06 Aug 2024 13:15:52 GMT</pubDate><ttl>60</ttl><dc:creator></dc:creator><item><title><![CDATA[(24.06.30)MethodArgumentNotValidException 처리]]></title><description><![CDATA[ 
+ <br><br><br>스프링과 타임리프로 SSR를 이용한 상품 관리용 관리자 페이지를 만드는데 클라이언트에서 잘못된 POST HTTP를 날리면 MethodArgumentNotValidException 이 발생함. 그런데 이걸 catch하려고 Controller Class의 이를 처리하는 Method에 아무리 try-catch를해도 예외가 안잡혔다. <br><br>MethodArgumentNotValidException 는 Spring MVC에서 Controller에 전달되기전 VIEW,MODEL 에서 예외가 발생해서 컨트롤러 안에서는 catch가 불가했던것임. <br><br>@ControllerAdvice는 전역 예외 처리가 가능 + 컨트롤러 예외처리 가능!<br>
+@ExceptionHandler(MethodArgumentNotValidException.class)로 MethodArgumentNotValidException을 catch해서 "version-SSR/product-error" 페이지로 리턴해줌<br><br>
+<br>@ControllerAdvice 로 전역 예외 처리가 가능한 사실을 처음 알게됨. 
+<br>Spring MVC에 관해 더 알아야겠다는 생각! Controller 외부에서 예외가 발생할것이라는 생각은 전혀 하지 못했다.
+<br><br>MethodArgumentNotValidException는 Spring MVC에서 요청이 컨트롤러 메서드에 도달하기 전에 데이터 바인딩 및 유효성 검사 과정에서 발생합니다. 이 예외는 주로 다음 위치에서 발생합니다:<br>
+<br>
+요청 데이터 바인딩 단계: Spring MVC는 요청 데이터를 컨트롤러 메서드의 파라미터로 바인딩합니다. 이 과정에서 @Valid 어노테이션이 적용된 객체에 대해 유효성 검사를 수행합니다. 만약 유효성 검사에 실패하면 MethodArgumentNotValidException 예외가 발생합니다.
+
+<br>
+HandlerMethodArgumentResolver: Spring MVC는 HandlerMethodArgumentResolver를 사용하여 컨트롤러 메서드의 파라미터를 해결합니다. 이 과정에서 유효성 검사 어노테이션이 있는 경우, MethodArgumentNotValidException이 발생할 수 있습니다.
+
+<br>예를 들어, 컨트롤러 메서드가 다음과 같을 때:<br>@PostMapping("/products")
+public ResponseEntity&lt;Product&gt; createProduct(@Valid @RequestBody Product product) {
+    // Product 객체가 유효한 경우 비즈니스 로직 수행
+    return ResponseEntity.ok(product);
+}
+복사<br>여기서 @Valid 어노테이션이 Product 객체에 적용되어 있습니다. Product 객체의 필드에 대해 유효성 검사가 실패하면, Spring은 컨트롤러 메서드에 도달하기 전에 MethodArgumentNotValidException을 발생시킵니다.<br><br>
+<br>클라이언트 요청: 클라이언트가 /products 엔드포인트에 POST 요청을 보냅니다.
+<br>디스패처 서블릿: 요청을 받아 적절한 핸들러(컨트롤러 메서드)를 찾습니다.
+<br>HandlerMapping: 요청 URL과 컨트롤러 메서드를 매핑합니다.
+<br>HandlerAdapter: 컨트롤러 메서드를 호출하기 위해 필요한 파라미터를 준비합니다. 이 단계에서 @Valid 어노테이션이 적용된 파라미터에 대해 유효성 검사를 수행합니다.
+<br>유효성 검사: Product 객체의 유효성 검사가 수행되고, 유효하지 않은 경우 MethodArgumentNotValidException이 발생합니다.
+<br>예외 처리: 예외가 발생하면 @ControllerAdvice로 설정된 전역 예외 처리기가 이 예외를 처리합니다.
+<br><br>전역 예외 처리기를 설정하여 MethodArgumentNotValidException을 처리하는 방법은 다음과 같습니다:<br>@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public String handleValidationExceptions(MethodArgumentNotValidException ex) {
+        return "version-SSR/product-error";
+    }
+}
+복사<br>이 예외 처리기는 MethodArgumentNotValidException이 발생했을 때 호출되며, HTTP 응답 상태 코드를 400 Bad Request로 설정하고 "version-SSR/product-error" 뷰를 반환합니다.<br><br>컨트롤러와 예외 처리기를 포함한 예제 코드를 다시 확인해 보겠습니다.<br><br>@RestController
+public class ProductController {
+
+    @PostMapping("/products")
+    public ResponseEntity&lt;Product&gt; createProduct(@Valid @RequestBody Product product) {
+        // Product 객체가 유효한 경우 비즈니스 로직 수행
+        return ResponseEntity.ok(product);
+    }
+}
+복사<br><br>@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public String handleValidationExceptions(MethodArgumentNotValidException ex) {
+        return "version-SSR/product-error";
+    }
+}
+복사<br><br>public class Product {
+
+    @NotNull(message = "Product name cannot be null")
+    private String name;
+
+    @Min(value = 1, message = "Price should be greater than zero")
+    private BigDecimal price;
+
+    // Getters and setters
+}
+복사<br>위 코드에서 ProductController는 Product 객체를 요청 본문에서 받아 처리합니다. @Valid 어노테이션이 적용된 Product 객체는 유효성 검사를 거치게 됩니다. 만약 Product 객체가 유효하지 않다면, MethodArgumentNotValidException이 발생하며, 이 예외는 전역 예외 처리기에서 처리됩니다.]]></description><link>&lt;1&gt;겪은-문제와-해결과정/240630-스프링-methodargumentnotvalidexception.html</link><guid isPermaLink="false">&lt;1&gt;겪은-문제와-해결과정/240630-스프링-MethodArgumentNotValidException.md</guid><pubDate>Sun, 30 Jun 2024 06:35:15 GMT</pubDate></item><item><title><![CDATA[@Valid, @ControllerAdvice로 코드 리팩토링]]></title><description><![CDATA[ 
+ <br><br>@Valid로 객체는 편하게 유효성 검사를함. ]]></description><link>&lt;1&gt;겪은-문제와-해결과정/240701-예외처리-리팩토링.html</link><guid isPermaLink="false">&lt;1&gt;겪은-문제와-해결과정/240701-예외처리-리팩토링.md</guid><pubDate>Mon, 01 Jul 2024 08:59:32 GMT</pubDate></item><item><title><![CDATA[스택활용시의 시간복잡도]]></title><description><![CDATA[ 
+ <br><br><br>
+<a rel="noopener" class="external-link" href="https://www.acmicpc.net/problem/17298" target="_blank">https://www.acmicpc.net/problem/17298</a>
+<br>
+<br>1&lt;=n &lt;=1,000,000 이라서 O(n^2)이면 초당 1조연산을 해야한다. 초당 1~2억 연산이 가능하다 하니 시간 제한이 1초인 이문제에서는 2중 for문을 하지말아야 한다.
+<br>아래는 Stack을 활용했는데 O(n)의 시간복잡도를 자랑한다. 처음에는 for문에 while문이 있었기네 O(n^2)이 아닌가 해서 혼란이 심했다. 
+<br>하지만 이렇게 생각하면된다 =&gt; 
+
+<br>스택은 푸시한만큼 팝할수있다. 
+<br>bStack에 푸시되는건 n개
+<br>for문이 도는동안 스택은 push n번, pop n번 총 2n번만 while문을 돌리는것!!!!!!
+<br>ex) n=100일때, 1루프:a번 push ... 100루트:0번 이런식인것!
+
+
+<br>//bStack에 push n번이면 pop도 n번만 발생할 수 밖에 없다.  
+//스택은 푸시,팝으로 시간복잡도 계산하면 될듯하네  
+for (int i = 0; i &lt; N; i++) {  
+    int value = aStack.pop();  
+    while (true){  
+        if(bStack.isEmpty()) {  
+            answerStack.push(-1);  
+            bStack.push(value);  
+            break;  
+        }  
+        if(bStack.peek()&gt;value){  
+            answerStack.push(bStack.peek());  
+            bStack.push(value);  
+            break;  
+        }else {  
+            bStack.pop();  
+        }  
+     }  
+}
+
+복사]]></description><link>&lt;1&gt;겪은-문제와-해결과정/스택활용시-시간복잡도.html</link><guid isPermaLink="false">&lt;1&gt;겪은-문제와-해결과정/스택활용시-시간복잡도.md</guid><pubDate>Thu, 13 Jun 2024 04:04:47 GMT</pubDate></item><item><title><![CDATA[코테에서 시간복잡도 고려해보기]]></title><description><![CDATA[ 
+ <br><br>반성<br>
+<br>시간복잡도에 관해 너무 생각을 안한다. 네이버 코테에서도 그냥 테스트케이스만 통과하기 급급했다. 평소 시간복잡도에 관해 고려하면서 코테 연습을 진행하자.
+<br>이 문제의 힌트만 보고 따라 구현했는데 메모리도 초과, 시간도 초과한 듯 하다. (그런데 이 문제에서 시간제한, 메모리제한에 대한 글귀가 없다. 옛날거라서 그런가?)
+<br>2중 for문에 각별히 주의해야한다.
+<br>n이 가장 최고일때 10^7인데, 2중 for문을 하면, O(n^2)
+<br><a rel="noopener" class="external-link" href="https://invrtd-h.tistory.com/50" target="_blank">https://invrtd-h.tistory.com/50</a> 이 블로그를 보면, n &lt;= 10,000,000일때 요구되는 시간복잡도는 O(n)이라고 되어있다.
+<br>블로그에 1초에 2억(2*10^8)번 연산할 수 있다(1초에 1억도 있고 불분명한듯) 는 명제를 참으로 여기고 시간복잡도를 대해 보라는 조언이 있음. 그러면 O(n^2)은 10^14가 되니 1초에 2억을 초과한다.
+<br>아래 Reference를 보면 n크기별 적절한 시간복잡도를 표로 정리해놓았다. 맹신은 X
+<br><br>
+<br><a data-tooltip-position="top" aria-label="https://velog.io/@doriskim/%EC%8B%9C%EA%B0%84%EB%B3%B5%EC%9E%A1%EB%8F%84Big-O-%EC%A0%95%EB%A6%AC" rel="noopener" class="external-link" href="https://velog.io/@doriskim/%EC%8B%9C%EA%B0%84%EB%B3%B5%EC%9E%A1%EB%8F%84Big-O-%EC%A0%95%EB%A6%AC" target="_blank">https://velog.io/@doriskim/시간복잡도Big-O-정리</a>
+<br><a rel="noopener" class="external-link" href="https://invrtd-h.tistory.com/50" target="_blank">https://invrtd-h.tistory.com/50</a>
+<br><a rel="noopener" class="external-link" href="https://cowimming.tistory.com/239" target="_blank">https://cowimming.tistory.com/239</a>
+<br><a data-tooltip-position="top" aria-label="https://velog.io/@jiyaho/%EC%95%8C%EA%B3%A0%EB%A6%AC%EC%A6%98-%EC%8B%9C%EA%B0%84-%EC%A0%9C%ED%95%9C%EA%B3%BC-%EC%8B%9C%EA%B0%84-%EB%B3%B5%EC%9E%A1%EB%8F%84" rel="noopener" class="external-link" href="https://velog.io/@jiyaho/%EC%95%8C%EA%B3%A0%EB%A6%AC%EC%A6%98-%EC%8B%9C%EA%B0%84-%EC%A0%9C%ED%95%9C%EA%B3%BC-%EC%8B%9C%EA%B0%84-%EB%B3%B5%EC%9E%A1%EB%8F%84" target="_blank">https://velog.io/@jiyaho/알고리즘-시간-제한과-시간-복잡도</a>
+]]></description><link>&lt;1&gt;겪은-문제와-해결과정/시간복잡도.html</link><guid isPermaLink="false">&lt;1&gt;겪은-문제와-해결과정/시간복잡도.md</guid><pubDate>Thu, 13 Jun 2024 04:03:56 GMT</pubDate></item><item><title><![CDATA[return o2 - o1;의 치명적 약점]]></title><description><![CDATA[ 
+ <br><br>
+<a rel="noopener" class="external-link" href="https://www.acmicpc.net/problem/7662" target="_blank">https://www.acmicpc.net/problem/7662</a>
+<br><br>2개의 우선순위큐와 1개의 맵을 활용했다. 시작방향은 맞았지만, 중간에서 틀림. 맵을 활용해서 카운팅한다는 개념이 새로웠다.<br>
+주어지는 값이 INTEGER_MAX, INTEGER_MIN 까지 주어진다. 이때<br>PriorityQueue&lt;Integer&gt; maxQ = new PriorityQueue&lt;&gt;((o1,o2)-&gt;{
+	return o2-o1;
+});
+복사<br>이런 코드를 사용해서 내림차순큐를 구현했는데 만약에 o2 = INTEGER_MAX이고 o1이 INTEGER_MIN이면 오버플로가 발생해서 의도하지 않은 결과가 나오는것!!! 안전하게<br>PriorityQueue&lt;Integer&gt; maxQ = new PriorityQueue&lt;&gt;(Comparator.reverseOrder());
+복사<br>이렇게 작성하거나<br>PriorityQueue&lt;Integer&gt; maxQ = new PriorityQueue&lt;&gt;((o1,o2)-&gt;{
+	if(o1&gt;o2){
+	}else{
+	}
+});
+복사<br>이렇게 꼭 if문으로 대소를 비교하자!!!]]></description><link>&lt;1&gt;겪은-문제와-해결과정/comparatorvso1o2.html</link><guid isPermaLink="false">&lt;1&gt;겪은-문제와-해결과정/comparatorVSo1o2.md</guid><pubDate>Wed, 22 May 2024 06:54:42 GMT</pubDate></item><item><title><![CDATA[Java의 equals(), hashCode(), Objects Class(Set 오버라이딩시 equals(),hashcode()를 둘다 해야야되는 이유)]]></title><description><![CDATA[ 
+ <br><br>@Override public int hashCode() { 
+
+	return Objects.hash(a,b,c); // name 필드의 해시코드를 반환한다. 
+
+}
+복사<br>
+<br>Objects.hash() 는 hash코드 생성해줌. native활용
+<br>hashMap, hashSet 등의 hash를 이용하는 자료구조는 hashcode() 일치여부-&gt;equal() 일치여부 순서로 같은 객체인지 확인한다. 
+<br><br>
+<br><a rel="noopener" class="external-link" href="https://docs.oracle.com/javase/8/docs/api/java/util/Objects.html" target="_blank">https://docs.oracle.com/javase/8/docs/api/java/util/Objects.html</a>
+<br><a rel="noopener" class="external-link" href="https://youtu.be/Go-Yf09xxzQ?si=3jkHE1i_U1c0JerC" target="_blank">https://youtu.be/Go-Yf09xxzQ?si=3jkHE1i_U1c0JerC</a>
+<br><a rel="noopener" class="external-link" href="https://inpa.tistory.com/entry/JAVA-%E2%98%95-equals-hashCode-%EB%A9%94%EC%84%9C%EB%93%9C-%EA%B0%9C%EB%85%90-%ED%99%9C%EC%9A%A9-%ED%8C%8C%ED%97%A4%EC%B9%98%EA%B8%B0" target="_blank">https://inpa.tistory.com/entry/JAVA-%E2%98%95-equals-hashCode-%EB%A9%94%EC%84%9C%EB%93%9C-%EA%B0%9C%EB%85%90-%ED%99%9C%EC%9A%A9-%ED%8C%8C%ED%97%A4%EC%B9%98%EA%B8%B0</a>
+]]></description><link>&lt;1&gt;겪은-문제와-해결과정/equals-hashcode.html</link><guid isPermaLink="false">&lt;1&gt;겪은-문제와-해결과정/equals-hashcode.md</guid><pubDate>Wed, 22 May 2024 06:54:05 GMT</pubDate></item><item><title><![CDATA[Union-Find]]></title><description><![CDATA[ 
+ <br><br>
+<a rel="noopener" class="external-link" href="https://www.acmicpc.net/problem/1717" target="_blank">https://www.acmicpc.net/problem/1717</a>
+<br>
+<a rel="noopener" class="external-link" href="https://www.acmicpc.net/problem/1976" target="_blank">https://www.acmicpc.net/problem/1976</a>
+<br><br>이 알고리즘을 몰라서 계속 시간초과와 메모리초과에 시달리다가 이 알고리즘으로 이 문제들로 부터 해방되었다.<br><br>static int getParent(int[] parents,int x){  
+    if(parents[x]==x) return x;  
+    else{  
+	//이 부분이 잘 이해가 안되었었다. 
+	//그냥 아래 2줄을 return getParent(parents,parents[x]);로 하면 시간초과가 발생한다.
+	//getParent()메서드가 한번 훝은 부분을 또 훝는것이기 때문
+	//어차피 루트노드만 같은지 판단하는게 핵심이기 때문에 parents[x] = getParent(parents,parents[x]) 이 코드로 갱신 시키는게 시간복잡도 측면에서 매우 유리하고 당연한것!!!
+        parents[x] = getParent(parents,parents[x]);  
+        return parents[x];  
+    }  
+}
+static void union(int[] parents,int a, int b){  
+    a = getParent(parents, a);  
+    b = getParent(parents, b);  
+    if(a == b) return;  
+    if(a&lt;b){  
+        parents[b] = a;  
+    }else {  
+        parents[a] = b;  
+    }  
+  
+}  
+static boolean find(int[] parents,int a, int b){  
+    a = getParent(parents, a);  
+    b = getParent(parents, b);  
+    if(a == b) return true;  
+    else return false;  
+}
+복사<br><br>
+<br><a rel="noopener" class="external-link" href="https://ip99202.github.io/posts/%EC%9C%A0%EB%8B%88%EC%98%A8-%ED%8C%8C%EC%9D%B8%EB%93%9C(Union-Find)/" target="_blank">https://ip99202.github.io/posts/%EC%9C%A0%EB%8B%88%EC%98%A8-%ED%8C%8C%EC%9D%B8%EB%93%9C(Union-Find)/</a>
+]]></description><link>&lt;1&gt;겪은-문제와-해결과정/union-find.html</link><guid isPermaLink="false">&lt;1&gt;겪은-문제와-해결과정/Union-Find.md</guid><pubDate>Wed, 22 May 2024 06:54:46 GMT</pubDate></item><item><title><![CDATA[1. 읽은 책들]]></title><description><![CDATA[ 
+ <br><br><br><br>]]></description><link>&lt;2&gt;자료-모음/1-읽은-책들.html</link><guid isPermaLink="false">&lt;2&gt;자료-모음/1-읽은-책들.md</guid><pubDate>Sun, 30 Jun 2024 06:23:01 GMT</pubDate></item><item><title><![CDATA[2. 좋은 유튜브 채널 모음]]></title><description><![CDATA[ 
+ <br><br><a data-tooltip-position="top" aria-label="https://www.youtube.com/watch?v=iyl9bfp_8ag&amp;ab_channel=%EB%8F%99%EB%B9%88%EB%82%98" rel="noopener" class="external-link" href="https://www.youtube.com/watch?v=iyl9bfp_8ag&amp;ab_channel=%EB%8F%99%EB%B9%88%EB%82%98" target="_blank">힙정렬 설명 너무 굳</a>]]></description><link>&lt;2&gt;자료-모음/2-좋은-유튜브-채널-모음.html</link><guid isPermaLink="false">&lt;2&gt;자료-모음/2-좋은-유튜브-채널-모음.md</guid><pubDate>Sun, 30 Jun 2024 06:23:38 GMT</pubDate></item><item><title><![CDATA[3. 기업의 기술블로그 모음]]></title><description><![CDATA[ 
+ <br>]]></description><link>&lt;2&gt;자료-모음/3-기업-기술블로그-모음.html</link><guid isPermaLink="false">&lt;2&gt;자료-모음/3-기업-기술블로그-모음.md</guid><pubDate>Sun, 30 Jun 2024 06:31:22 GMT</pubDate></item><item><title><![CDATA[4. 참조할 만한 블로그 모음]]></title><description><![CDATA[ 
+ <br>]]></description><link>&lt;2&gt;자료-모음/4-참조할-만한-블로그-모음.html</link><guid isPermaLink="false">&lt;2&gt;자료-모음/4-참조할-만한-블로그-모음.md</guid><pubDate>Sun, 30 Jun 2024 06:33:16 GMT</pubDate></item><item><title><![CDATA[헷갈리는 네트워크 용어 정리]]></title><description><![CDATA[ 
+ <br><br>
+<br>L4, Transport Layer, Segment, TCP, 호스트에 내장된 컴퓨터에서 사용됨(TCP/IP 스택, 네트워크 라이브러리 등)
+<br>L3, Internet Layer, Packet, IP, 라우터장비 사용됨
+<br>라우터는 네트워크 간에 데이터를 전달하고 경로를 결정하는 역할
+<br>라우터는 패킷을 다른 네트워크로 라우팅하거나 동일한 네트워크 내에서 전달 
+<br>라우터는 주로 네트워크 인터페이스와 라우팅 테이블을 갖춘 하드웨어 장비로 구현됨
+]]></description><link>&lt;3&gt;유용한것들/네트워크-용어정리.html</link><guid isPermaLink="false">&lt;3&gt;유용한것들/네트워크-용어정리.md</guid><pubDate>Wed, 22 May 2024 06:54:14 GMT</pubDate></item><item><title><![CDATA[Docker교과서에서 익힌 명령어]]></title><description><![CDATA[ 
+ <br><br><br>docker container run 8a8853903859<br>
+컨테이너에 이미지 올린다. 이미지 명칭은 이미지 이름 or 해시값<br>docker container run -it 8a8853903859<br>
+-it 플래그 사용하면 컨테이너를 대화식으로 실행 가능(터미널)<br>docker container commit ch03lab newCh03<br>
+commit =&gt;     Create a new image from a container's changes<br>
+컨테이너의 변화가 있으면 커밋을해 새로운 이미지를 생성함<br>Docker 명령어에서 -it는 다음과 같은 두 가지 옵션을 결합한 것입니다:<br>
+<br>-i 또는 --interactive: 컨테이너의 표준 입력(stdin)을 열어둡니다. 이를 통해 터미널 세션에서 입력을 받을 수 있게 됩니다.
+<br>-t 또는 --tty: 가상 터미널(tty)을 할당합니다. 이를 통해 컨테이너 내부의 쉘에서 명령을 실행하고 결과를 볼 수 있는 터미널 환경을 제공합니다.
+<br>이 두 옵션을 결합하여 사용하면, 컨테이너를 인터랙티브 모드로 실행할 수 있습니다. 즉, 사용자와 상호작용할 수 있는 쉘을 실행할 수 있게 됩니다. 다음은 예시입니다:<br>docker container run -it ubuntu /bin/bash
+복사<br>이 명령어는 ubuntu 이미지를 사용하여 컨테이너를 생성하고, /bin/bash 쉘을 실행합니다. 사용자는 해당 쉘에서 직접 명령을 입력하고 결과를 볼 수 있습니다.<br><br>docker build -t {imageName} .<br><br>docker run -p 8080:8080 {imageName}<br><br>docker image pull [OPTIONS] NAME[:TAG|@DIGEST]<br>개발중인 컴퓨터에서  build =&gt; push 하고<br>
+서버 컴퓨터에서 pull =&gt; run 하면 서버 환경 신경 안쓰고 배포 성공!  굳.]]></description><link>&lt;3&gt;유용한것들/docker교과서에서-익힌-명령어.html</link><guid isPermaLink="false">&lt;3&gt;유용한것들/Docker교과서에서-익힌-명령어.md</guid><pubDate>Wed, 12 Jun 2024 14:07:42 GMT</pubDate></item><item><title><![CDATA[단방향 암호화]]></title><description><![CDATA[ 
+ <br><br>
+<br>다른말로 HASH라 한다. Hash로 구현
+<br>hash의 사전 정의: 고기와 감자를 잘게 다져 섞어 요리하여 따뜻하게 차려 낸 것
+<br>HASH는 한번 갈면 되돌리는것이 불가하다. 
+<br>무결성 파악하는데 HASH가 유용
+<br>어떤 파일이 조작되었는지 아닌지 파악하는데 유용하다!
+<br>CRC, MD5, SHA-1 SHA-256 등등 HASH algorithm 존재
+<br>HASH 사용처
+
+<br>verifying the integrity of messages and files(무결성 체크)
+<br>Signature generation and verification(전자서명)
+<br>File or Data identifier(파일or데이터 식별자)
+<br>Password verification(비번 저장시)
+<br>Proof-of-work(블록체인, 가상화폐등 에서)
+
+
+<br><br>
+<br><a rel="noopener" class="external-link" href="https://youtu.be/qP1H2dwnAVA?si=2tlnxMcR5qpY8Pci" target="_blank">https://youtu.be/qP1H2dwnAVA?si=2tlnxMcR5qpY8Pci</a>
+]]></description><link>&lt;4&gt;궁금증/단방향암호화.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/단방향암호화.md</guid><pubDate>Wed, 22 May 2024 06:54:48 GMT</pubDate></item><item><title><![CDATA[[당근]입사 2개월차 백엔드 개발자의 우당탕탕 개발 성장기]]></title><description><![CDATA[ 
+ <br><br><a data-tooltip-position="top" aria-label="https://medium.com/daangn/%EC%9E%85%EC%82%AC-2%EA%B0%9C%EC%9B%94%EC%B0%A8-%EB%B0%B1%EC%97%94%EB%93%9C-%EA%B0%9C%EB%B0%9C%EC%9E%90%EC%9D%98-%EC%9A%B0%EB%8B%B9%ED%83%95%ED%83%95-%EA%B0%9C%EB%B0%9C-%EC%84%B1%EC%9E%A5%EA%B8%B0-048b1e2403da" rel="noopener" class="external-link" href="https://medium.com/daangn/%EC%9E%85%EC%82%AC-2%EA%B0%9C%EC%9B%94%EC%B0%A8-%EB%B0%B1%EC%97%94%EB%93%9C-%EA%B0%9C%EB%B0%9C%EC%9E%90%EC%9D%98-%EC%9A%B0%EB%8B%B9%ED%83%95%ED%83%95-%EA%B0%9C%EB%B0%9C-%EC%84%B1%EC%9E%A5%EA%B8%B0-048b1e2403da" target="_blank">링크</a><br><br>
+<br>장애 대응을 위한 서버 모니터링은 어떤 도구를 사용할까? 어떤 정보를 보는걸까?
+<br>pod이 뭔가? k6 시나리오? 그라파나?
+<br>코루틴을 사용하던데 java spring도 코루틴이 가능한가?
+<br><br><br>예를 들면<br>
+<br>요청을 동시 or 순차적으로 보낼것 인가?
+<br>요청을 보낸 곳 중 일부에서 에러가 발생하면 어떻게 처리할 것인가?<br>
+만약, '3개의 서버에 요청을 보내는 기능 구현' 이런식으로 두루뭉실하게 구체적인 고민이 없으면 나중에 코드로 구현하면서 '아!' 하면서 코딩이 멈추는 경우가 생길것! 나도 겪어봄...<br>
+해결법: 테크 스팩 문서를 적극 활용<br>
+테크 스펙이란 기능을 어떻게 구현할 것인지 기술적으로 풀어서 설명하는 기능 구현서임. 이 글에 예시 템플릿이 있는데 풀버젼은 아닌듯함.<br>
+<a data-tooltip-position="top" aria-label="https://blog.banksalad.com/tech/we-work-by-tech-spec/" rel="noopener" class="external-link" href="https://blog.banksalad.com/tech/we-work-by-tech-spec/" target="_blank">뱅크샐러드 테크스펙</a><br>
+<a data-tooltip-position="top" aria-label="https://stackoverflow.blog/2020/04/06/a-practical-guide-to-writing-technical-specs/" rel="noopener" class="external-link" href="https://stackoverflow.blog/2020/04/06/a-practical-guide-to-writing-technical-specs/" target="_blank">stackoverflow_blog_techspec</a>
+<br>테크스펙 장점<br>
+<br>할 일 구체적 파악
+<br>개발 전 동료들과 소통 가능
+<br>테크스펙을 작성 함 으로서 오히려 개발 효율 상승
+<br><br>Junit같은걸로 테스트 코드를 작성해본 경험은 있음. 그런데 솔직히 이거 왜 써야되는지 크게 공감은 안되었는데 이 글 덕에 공감이 됨.<br>
+데이터를 통해 정량적인 수치를 기반으로 객관적 검증!-&gt;테스트코드<br><br>
+<br>코드  추가 or 코드 수정 후 하나하나 실행할 필요없이 테스트 한번 돌리면 됨
+<br>테스트 코드는 누적이 된다! 다른 개발자가 만든 테스트 코드를 사용하면 시간을 엄청 아낄수 있음<br>
+실무에서는 테스트 코드를 작성하는데 여러가지 사항을 고려하는 구나 싶다. 그냥 기능이 동작한다에서 끝나는게 아니라 이 기능이 동작한 결과가 내부/외부 정책에 부합하는지, 지연시간이 길어지는 상황에 대응하는지 등 경험과 예측하는 능력이 요구된다.
+<br><br>]]></description><link>&lt;4&gt;궁금증/당근-인턴개발자.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/당근-인턴개발자.md</guid><pubDate>Wed, 22 May 2024 06:55:09 GMT</pubDate></item><item><title><![CDATA[데몬(deamon)이 뭔가?]]></title><description><![CDATA[ 
+ <br><br>데몬(daemon)은 Unix 및 Unix-like 운영 체제에서 백그라운드에서 실행되는 프로그램을 의미합니다. 데몬은 시스템의 다양한 기능을 관리하고, 특정 이벤트에 응답하거나 주기적인 작업을 수행합니다. 데몬은 일반적으로 사용자와 직접 상호작용하지 않으며, 시스템 부팅 시 자동으로 시작되고, 시스템이 종료될 때까지 백그라운드에서 계속 실행됩니다.<br><br>
+<br>
+백그라운드 실행:
+
+<br>데몬은 백그라운드에서 실행되어 사용자 인터페이스와 독립적으로 작동합니다.
+<br>주로 시스템 서비스나 유지 보수 작업을 수행합니다.
+
+
+<br>
+자동 시작:
+
+<br>많은 데몬은 시스템 부팅 시 자동으로 시작됩니다.
+<br>이는 시스템의 안정성과 지속적인 서비스 제공을 보장합니다.
+
+
+<br>
+주기적 작업 수행:
+
+<br>일부 데몬은 주기적으로 특정 작업을 수행하도록 설정됩니다. 예를 들어, 로그 파일을 정리하거나 백업 작업을 수행하는 데몬이 있습니다.
+
+
+<br>
+이벤트 기반 동작:
+
+<br>데몬은 특정 이벤트가 발생하면 작업을 수행하도록 설정될 수 있습니다. 예를 들어, 네트워크 연결이 생기면 작동하는 네트워크 데몬 등이 있습니다.
+
+
+<br><br>
+<br>
+sshd:
+
+<br>Secure Shell (SSH) 데몬으로, 원격 접속을 관리합니다.
+<br>원격 사용자가 SSH를 통해 서버에 접속할 때 사용됩니다.
+
+
+<br>
+httpd:
+
+<br>Apache HTTP Server 데몬으로, 웹 서버 기능을 제공합니다.
+<br>클라이언트의 HTTP 요청을 처리하여 웹 페이지를 제공하는 역할을 합니다.
+
+
+<br>
+cron:
+
+<br>주기적인 작업을 예약하고 실행하는 데몬입니다.
+<br>사용자나 시스템이 설정한 시간표에 따라 스크립트나 명령을 실행합니다.
+
+
+<br><br>systemd는 Linux 시스템에서 시스템 및 서비스 관리 역할을 수행하는 초기화 시스템(init system)입니다. systemd는 다음과 같은 기능을 제공합니다:<br>
+<br>
+서비스 관리:
+
+<br>시스템 부팅 시 서비스의 시작 및 정지를 관리합니다.
+<br>서비스의 의존성을 관리하여 올바른 순서로 서비스를 시작합니다.
+
+
+<br>
+병렬 실행:
+
+<br>가능한 경우 여러 서비스를 병렬로 시작하여 부팅 시간을 단축합니다.
+
+
+<br>
+로그 관리:
+
+<br>journald를 통해 시스템 로그를 관리합니다.
+
+
+<br>
+타이머:
+
+<br>주기적 작업을 관리하기 위한 타이머 기능을 제공합니다.
+
+
+<br>
+디바이스 및 마운트 관리:
+
+<br>파일 시스템 마운트, 스왑 관리, 디바이스 자동 마운트 등을 관리합니다.
+
+
+<br>systemd는 전통적인 init 시스템보다 더 많은 기능과 향상된 성능을 제공하여, 현대 Linux 배포판에서 널리 사용됩니다. systemctl 명령어를 통해 systemd를 쉽게 제어하고 관리할 수 있습니다.<br><br>systemctl은 Linux 운영 체제에서 시스템 및 서비스 관리 데몬인 systemd와 상호작용하기 위한 명령줄 도구입니다. systemd는 부팅 프로세스를 관리하고 시스템 서비스 및 유닛을 관리하는 데 사용됩니다. systemctl은 이러한 작업을 수행하기 위한 주요 도구로, 다양한 명령을 통해 시스템과 서비스의 상태를 조회하거나 제어할 수 있습니다.<br><br>
+<br>
+서비스 관리
+
+<br>start : 서비스를 시작합니다.
+sudo systemctl start [서비스 이름]
+복사
+
+<br>stop : 서비스를 중지합니다.
+sudo systemctl stop [서비스 이름]
+복사
+
+<br>restart : 서비스를 재시작합니다.
+sudo systemctl restart [서비스 이름]
+복사
+
+<br>reload : 서비스 구성을 다시 로드합니다.
+sudo systemctl reload [서비스 이름]
+복사
+
+<br>status : 서비스의 상태를 확인합니다.
+systemctl status [서비스 이름]
+복사
+
+
+
+<br>
+부팅 시 서비스 관리
+
+<br>enable : 부팅 시 서비스를 자동으로 시작되도록 설정합니다.
+sudo systemctl enable [서비스 이름]
+복사
+
+<br>disable : 부팅 시 서비스를 자동으로 시작되지 않도록 설정합니다.
+sudo systemctl disable [서비스 이름]
+복사
+
+
+
+<br>
+시스템 상태 및 관리
+
+<br>is-active : 서비스가 활성화되어 있는지 확인합니다.
+systemctl is-active [서비스 이름]
+복사
+
+<br>is-enabled : 서비스가 부팅 시 자동으로 시작되도록 설정되어 있는지 확인합니다.
+systemctl is-enabled [서비스 이름]
+복사
+
+<br>list-units : 현재 로드된 유닛 목록을 나열합니다.
+systemctl list-units
+복사
+
+<br>list-unit-files : 유닛 파일 목록을 나열합니다.
+systemctl list-unit-files
+복사
+
+
+
+<br>
+시스템 재부팅 및 종료
+
+<br>reboot : 시스템을 재부팅합니다.
+sudo systemctl reboot
+복사
+
+<br>poweroff : 시스템을 종료합니다.
+sudo systemctl poweroff
+복사
+
+
+
+<br>
+타이머 및 기타 유닛
+
+<br>list-timers : 활성화된 타이머 목록을 나열합니다.
+systemctl list-timers
+복사
+
+<br>start, stop, status 등은 타이머, 마운트 포인트, 서비스 등 다양한 유닛 유형에 적용할 수 있습니다.
+
+
+<br>systemctl을 사용하면 서비스의 상태를 쉽게 조회하고 제어할 수 있으며, 시스템의 초기화 및 종료, 재부팅 등의 작업을 간편하게 수행할 수 있습니다. systemctl은 시스템 관리자와 개발자가 Linux 시스템을 효율적으로 관리하는 데 필수적인 도구입니다.]]></description><link>&lt;4&gt;궁금증/데몬이란.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/데몬이란.md</guid><pubDate>Fri, 14 Jun 2024 08:00:58 GMT</pubDate></item><item><title><![CDATA[동기화 3대장(스핀락, 뮤텍스, 세마포)]]></title><description><![CDATA[ 
+ <br><br>
+<br>race condition (경쟁 조건) : 여러 스레드가 동시에 어떤 공유 데이터를 조작할 때 타이밍이나 접근 순서에 따라 결과가 달라질 수 있는 상황
+<br>synchronization(동기화) : 여러 프로세스/스레드를 동시에 실행해도 공유 데이터의 일관성을 유지하는 것
+<br>critical section(임계 영역) : 공유 데이터의 일관성을 보장하기 위해 하나의 프로세스/스레드만 진입해서 실행 가능한 영역
+<br>mutual exclusion 보장하는법중 하나는 'lock'!
+<br>CPU atomic 명령어: 실행 중간에 간섭 or 중단 X, 같은 메모리 역역에대해 동시에 실행 X
+<br><br>
+<br>계속 락을 확인한다. spin!!! 뺑뺑이 돈다. 락을 가질 수 있을때 까지 반복.
+<br>기다리는 동안 CPU를 낭비한다
+<br><br>
+<br>spinlock개선. 락이 준비되면 깨움. 
+<br>항상 스핀락보다 좋은가? no: 멀티 코어환경, critical section에서의 작업이 context switching보다 더 빨리 끝나면 spinlock이 mutex보다 더 이점이 있음.
+<br>mutex는 컨텍스트 잠들고 깨는 과정에 컨텍스트 스위칭이 발생. 반면, spinlock은 살아서 계속 lock 확인
+<br><br>
+<br>signal mechanism가진, 하나 이상의 프로세스/스레드가 critical section에 접근 가능하도록 하는 장치
+<br>이진 세마포, 카운팅 세마포 ...
+<br>순서 정해줄 때 사용
+<br>반드시 wait() or signal()이 같은 프로세스/스레드에서 실행될 필요 없다
+<br><br>
+<br>뮤텍스, 이진 세마포는 같은거 아닌가? NO!
+
+<br>뮤텍스를 락을 가진 자(프로세스/스레드)만 락을 해재 가능. 세마포는 그렇지 않다.
+<br>뮤텍스는 priority inheritance속성 가진다. 세마포는 그렇지 않다. priority inheritance은 우선순위 높은 스레드에 의해 의존되고있는 스레드의 우선순위를 올려서 락을 빨리 풀어 의존하고 있는 스레드를 빨리 처리해주게함.
+
+
+<br>상호 배재만 필요하다면 뮤택스
+<br>작업 간에 실행 순서 동기화가 필요하다면 세마포 
+<br>
+어렵;
+<br><br>
+<br><a rel="noopener" class="external-link" href="https://youtu.be/gTkvX2Awj6g?si=VPIXltzfzjBJrGhc" target="_blank">https://youtu.be/gTkvX2Awj6g?si=VPIXltzfzjBJrGhc</a>
+]]></description><link>&lt;4&gt;궁금증/동기화-3대장.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/동기화-3대장.md</guid><pubDate>Wed, 22 May 2024 06:53:46 GMT</pubDate></item><item><title><![CDATA[메모리 가시성이란?]]></title><description><![CDATA[ 
+ <br><br>메모리 가시성(Memory Visibility)은 멀티스레딩 환경에서 한 스레드가 메모리에 기록한 변경 사항이 다른 스레드에게 언제, 어떻게 보이는지를 의미합니다. 이는 주로 컴퓨터 과학에서 동시성 문제를 다룰 때 중요한 개념입니다. 메모리 가시성 문제는 여러 스레드가 공유 자원에 접근할 때 발생할 수 있으며, 적절한 동기화 없이 스레드 간에 데이터 일관성을 보장하기 어려운 상황이 발생할 수 있습니다.<br><br>
+<br>CPU 캐시: 각 CPU 코어는 성능 향상을 위해 자신의 캐시를 사용합니다. 한 코어가 메모리를 변경해도 다른 코어는 자신의 캐시된 값을 참조할 수 있어 변경 사항이 즉시 반영되지 않을 수 있습니다.
+<br>컴파일러 최적화: 컴파일러는 코드의 성능을 최적화하기 위해 변수의 값을 레지스터에 저장하거나, 불필요한 메모리 접근을 제거하는 등의 최적화를 수행합니다. 이로 인해 예상치 못한 메모리 가시성 문제가 발생할 수 있습니다.
+<br>메모리 재정렬 (Memory Reordering): 프로세서나 컴파일러가 명령어의 순서를 변경하여 성능을 최적화하는데, 이는 메모리 접근 순서에 영향을 미쳐 가시성 문제를 유발할 수 있습니다.
+<br><br>
+<br>
+동기화 메커니즘 사용: 
+
+<br>뮤텍스(Mutex)와 락(Lock): 상호 배제 동기화 메커니즘을 사용하여 한 번에 하나의 스레드만 공유 자원에 접근하도록 합니다.
+<br>조건 변수(Condition Variables): 특정 조건이 만족될 때까지 스레드를 기다리게 하거나 조건이 만족되면 스레드를 깨워주는 동기화 도구입니다.
+
+
+<br>
+메모리 배리어 (Memory Barriers) / 펜스(Fence):
+
+<br>메모리 배리어: 프로세서에게 특정 명령어 이전의 모든 메모리 연산이 완료된 후에야 다음 명령어를 실행하도록 지시합니다. 이는 명령어 재정렬을 방지하고 메모리 가시성을 보장합니다.
+
+
+<br>
+언어 수준의 동기화 도구:
+
+<br>자바의 volatile 키워드: 변수를 volatile로 선언하면 해당 변수에 대한 읽기와 쓰기가 직접 메모리에서 이루어져 캐시의 일관성 문제를 방지합니다.
+<br>C++의 std::atomic: 원자적 연산을 제공하여 변수에 대한 동기화된 접근을 보장합니다.
+
+
+<br><br>class SharedObject {
+    private volatile boolean flag = false;
+
+    public void writerThread() {
+        flag = true; // 이 쓰레드가 flag를 true로 설정
+    }
+
+    public void readerThread() {
+        while (!flag) {
+            // flag가 true가 될 때까지 대기
+        }
+        // flag가 true가 되면 실행
+    }
+}
+복사<br>위 예시에서 volatile 키워드는 flag 변수에 대한 메모리 가시성을 보장합니다. writerThread가 flag를 true로 설정하면, 다른 모든 스레드에서 이 변경 사항을 즉시 볼 수 있습니다.<br>메모리 가시성 문제를 해결하려면 이러한 동기화 기법과 언어적 지원을 적절히 활용해야 합니다. 이를 통해 멀티스레드 환경에서 데이터의 일관성과 정확성을 유지할 수 있습니다.<br>by chatGPT 4o]]></description><link>&lt;4&gt;궁금증/메모리-가시성.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/메모리-가시성.md</guid><pubDate>Wed, 22 May 2024 06:53:49 GMT</pubDate></item><item><title><![CDATA[스프링과 톰캣 각각의 역할은?]]></title><description><![CDATA[ 
+ <br><br><br>
+<br>서블릿을 한마디로 정의하면 '웹 서버에서 동적 웹 콘텐츠를 생성하는 자바 프로그램'
+<br>클라이언트 요청에 따라 동적으로 HTML 페이지를 생성.
+<br><br>톰캣은 web server이자 servlet container다. 내가 찾은 자료들에서는 WAS(web application server)보다 web server에 가깝다고 함.<br>톰캣 이전, 직접 서블릿api 사용해서모든 것을 구현해야했음. 이건 서블릿 개발을 간편하기 위해 탄생. 개발자는 톰캣을 사용하면 서블릿 개발에 필요한 기본적인 기능을 쉽게 활용할 수 있으며, 직접 서블릿 구현에 대한 부담을 줄일 수 있다.<br>
+<br>서블릿 라이프 사이클 관리
+<br>서블릿 매핑
+<br>url 처리 
+<br>JSP 컴파일 및 실행
+<br>보안
+<br>클러스터링 
+<br>JSP: HTML 코드 안에 Java 코드를 삽입하여 동적으로 HTML 페이지를 생성하는 기술
+<br>서블릿 컨테이너는 웹 서버와 함께 사용된다. 웹 서버는 정적 파일(HTML, CSS, JavaScript 등)을 처리하고, 서블릿 컨테이너는 동적 웹 페이지(서블릿, JSP)를 처리함.<br>대표적인 서블릿 컨테이너: Apache Tomcat, Jetty, JBoss 등<br><a rel="noopener" class="external-link" href="https://docs.oracle.com/javaee/7/tutorial/servlets001.htm#BNAFE" target="_blank">https://docs.oracle.com/javaee/7/tutorial/servlets001.htm#BNAFE</a><br>
+<a rel="noopener" class="external-link" href="https://www.geeksforgeeks.org/introduction-java-servlets/?ref=lbp" target="_blank">https://www.geeksforgeeks.org/introduction-java-servlets/?ref=lbp</a><br>
+<a rel="noopener" class="external-link" href="https://www.geeksforgeeks.org/introduction-to-jsp/?ref=lbp" target="_blank">https://www.geeksforgeeks.org/introduction-to-jsp/?ref=lbp</a><br>Spring <br>
+<br>애플리케이션의 비즈니스 로직과 구조를 관리하고 제어하는 데 중점
+<br>비즈니스 로직 관리: 스프링은 의존성 주입(Dependency Injection)이나 제어의 역전(Inversion of Control)과 같은 기술을 통해 애플리케이션의 객체를 관리하고 이들 사이의 의존성을 관리합니다. 이는 유지보수가 용이하고 테스트하기 쉬운 코드를 작성하는 데 도움이 됩니다.
+<br>웹 애플리케이션 개발: 스프링은 웹 애플리케이션을 개발하기 위한 다양한 모듈을 제공합니다. 예를 들어, Spring MVC는 모델-뷰-컨트롤러 아키텍처를 구현하여 웹 애플리케이션을 구축하는 데 도움이 됩니다. 또한 Spring WebFlux는 비동기 및 반응형 웹 애플리케이션을 위한 모듈을 제공합니다.
+<br><br>
+<br>웹 서버 및 서블릿 컨테이너로서 HTTP 요청을 수신하고 애플리케이션의 실행 환경을 제공
+<br>HTTP 요청 처리: 톰캣은 클라이언트로부터의 HTTP 요청을 받아들여 웹 애플리케이션으로 라우팅하고, HTTP 응답을 클라이언트에게 반환합니다.
+<br>서블릿 관리: 톰캣은 서블릿 컨테이너의 역할을 수행하여 서블릿을 실행하고 관리합니다. 서블릿은 클라이언트의 요청을 처리하고 동적으로 HTML을 생성하는 데 사용됩니다.
+<br>JSP 지원: 톰캣은 Java Server Pages(JSP)를 실행하는 데 사용됩니다. JSP는 동적인 웹 페이지를 생성하기 위한 기술로, 서블릿과 유사한 방식으로 동작합니다.
+]]></description><link>&lt;4&gt;궁금증/스프링-톰캣-역할분담.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/스프링-톰캣-역할분담.md</guid><pubDate>Wed, 12 Jun 2024 11:58:31 GMT</pubDate></item><item><title><![CDATA[스프링을 왜 쓸까?]]></title><description><![CDATA[ 
+ <br><br>
+<br>개발 생산성 향상
+<br>
+<br>Dependency Injection (DI): 스프링 프레임워크는 DI를 통해 객체 간의 의존성을 관리하여 코드의 결합도를 낮추고 유지 관리를 용이하게 합니다.
+<br>Aspect-Oriented Programming (AOP): 스프링 프레임워크는 AOP를 통해 공통 관심사를 분리하여 코드의 재사용성을 높이고 유지 관리를 용이하게 합니다.
+<br>
+<br>다양한 기능 제공
+<br>
+<br>웹 개발: 스프링 프레임워크는 MVC 프레임워크를 제공하여 웹 애플리케이션 개발을 지원합니다.
+<br>데이터 접근: 스프링 프레임워크는 JDBC, JPA, Hibernate 등 다양한 데이터 접근 기술을 지원합니다.
+<br>트랜잭션 관리: 스프링 프레임워크는 트랜잭션 관리 기능을 제공하여 데이터 일관성을 유지합니다.
+<br>보안: 스프링 프레임워크는 Spring Security를 통해 애플리케이션 보안을 강화합니다.
+]]></description><link>&lt;4&gt;궁금증/스프링을-왜쓰나.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/스프링을-왜쓰나.md</guid><pubDate>Wed, 12 Jun 2024 11:57:58 GMT</pubDate></item><item><title><![CDATA[암호학(cryptography) 첫걸음]]></title><description><![CDATA[ 
+ <br><br>
+<br>
+암호학(cryptography): 비밀을 다루는 방법
+
+<br>
+기밀성(confidentiality), 무결성(integrity), 인증(authentication) 지켜야할 요소들<br>
+<img alt="큰그림" src="https://velog.velcdn.com/images/hodu0726/post/69273fe3-350a-450d-ac3b-ed2cdda42d95/image.png" referrerpolicy="no-referrer">
+
+<br>
+양방향 암호화
+
+<br>암호화 복호화 모두 할수있다. 전형적임.
+<br>기밀성에 초점
+
+<br>대칭키 방식: 암호,복호 둘다 하나의 키로 (AES, Twofish)
+<br>비대칭키 방식: 각각을 위한 2개의 키로, 위대한 암호화 방법 (RSA)
+
+
+
+
+<br>
+단방향 암호화
+
+<br>암호화는되는데 복호화는 안됨
+<br>무결성에 초점
+<br>md5, sha
+
+
+<br><br>
+<br><a rel="noopener" class="external-link" href="https://youtu.be/NBrcJSkgYmA?si=V3KI6giDbUZi7Qo0" target="_blank">https://youtu.be/NBrcJSkgYmA?si=V3KI6giDbUZi7Qo0</a>
+]]></description><link>&lt;4&gt;궁금증/암호학-시작.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/암호학-시작.md</guid><pubDate>Wed, 22 May 2024 06:54:52 GMT</pubDate><enclosure url="https://velog.velcdn.com/images/hodu0726/post/69273fe3-350a-450d-ac3b-ed2cdda42d95/image.png" length="0" type="image/png"/><content:encoded>&lt;figure&gt;&lt;img src=&quot;https://velog.velcdn.com/images/hodu0726/post/69273fe3-350a-450d-ac3b-ed2cdda42d95/image.png&quot;&gt;&lt;/figure&gt;</content:encoded></item><item><title><![CDATA[양방향 암호화]]></title><description><![CDATA[ 
+ <br><br><br>
+<br>하나의 키로 암호화 복호화 둘 다 함
+<br>AES 가 유명
+<br><br>
+<br>2개의 키(공개키public key, 비공개키private key)를 사용한다. 
+
+<br>공개키 이용해서 평문을 암호문으로 암호화
+<br>비공개키 이용해서 암호문을 평문으로 복호화
+<br>또는
+<br>비공개키 이용해서 평문을 암호문으로 암호화
+<br>공개키 이용해서 암호문을 평문으로 복호화
+
+
+<br>왜 사용? 배달사고 방지
+<br>대칭키 방식의 한계
+
+<br>통신을 통해 암호문과 키를 주고 받으면 통신 도중에 누군가 가로챌 가능성이있다. 
+
+
+<br>비대칭은 그에 반해...
+
+<br>A는 본인의 공개키를 인터넷에 공유한다. 누구나 공개키를 가진다 크래커 조차도. 공개키를 가지고 암호화한 암호문을 A한테 보낸다. 그런데 크래커는 공개키만 가지고있으니 중간에 암호문을 가로체도 복호화가 불가!  
+<br>반면, A는 비공개키로 복호화 가능!!!
+
+
+<br>RSA 가 유명
+<br>전자 서명에 활용됨
+
+<br>예시)
+<br>
+
+<br>RSA 방식으로 키 페어 생성
+
+
+<br>
+
+<br>내 글을 비공개키를 이용해서 암호화. 이를 서명이라함.
+
+
+<br>
+
+<br>text파일에 내 글 + 암호문(서명)을 저장후 인터넷에 공유
+
+
+<br>
+
+<br>공개키를 가진 사람이 공유된 text파일을 다운로드후, text파일의 서명을 공개키로 복호화해서 글 내용이 동일한지 확인가능!
+
+
+
+
+<br><br>
+<br><a rel="noopener" class="external-link" href="https://youtu.be/MR4sCU82tgo?si=-SlbLlolm23JJfOD" target="_blank">https://youtu.be/MR4sCU82tgo?si=-SlbLlolm23JJfOD</a>
+]]></description><link>&lt;4&gt;궁금증/양방향암호화.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/양방향암호화.md</guid><pubDate>Wed, 22 May 2024 06:54:54 GMT</pubDate></item><item><title><![CDATA[Singleton Object의 처리가 오래걸릴때 다른 스레드는 어떻게 하는가?]]></title><description><![CDATA[ 
+ <br><br>싱글톤 객체의 메서드가 데이터를 처리하는 데 시간이 오래 걸릴 경우, 여러 스레드가 동시에 해당 메서드를 호출할 때 하나의 스레드는 대기하게 될 수 있습니다. 이는 메서드 호출을 처리하는 스레드의 수가 한정되어 있고, 다른 스레드들은 이 처리가 완료될 때까지 대기해야 하기 때문입니다.<br><br>가정해보겠습니다. 아래와 같은 상황을 고려해 봅시다:<br>
+<br>싱글톤 객체 메서드의 처리 시간: 예를 들어, 아래와 같이 메서드가 데이터를 가져와서 처리하는데 3초가 걸린다고 가정합니다.
+<br>@Service
+public class DataService {
+
+    public String fetchData() {
+        // 데이터를 가져오는 데 3초가 걸리는 가정
+        try {
+            Thread.sleep(3000); // 3초 동안 대기
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return "Data fetched successfully";
+    }
+}
+복사<br>
+<br>여러 스레드에서의 동시 호출: 이제 여러 클라이언트가 동시에 DataService의 fetchData 메서드를 호출할 때를 고려해 봅시다.
+<br>import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class DataController {
+
+    @Autowired
+    private DataService dataService;
+
+    @GetMapping("/fetch-data")
+    public String fetchData() {
+        // 각 클라이언트 요청이 동시에 이 메서드를 호출할 수 있음
+        return dataService.fetchData();
+    }
+}
+복사<br>
+<br>
+스레드 대기 상황: 이제 두 개의 클라이언트가 거의 동시에 /fetch-data 엔드포인트를 요청한다고 가정해 봅시다.
+
+<br>클라이언트 A가 /fetch-data를 호출하여 DataService의 fetchData 메서드를 실행합니다. 이 메서드는 3초 동안 데이터를 처리합니다.
+<br>클라이언트 B가 매우 짧은 시간 후에 /fetch-data를 호출하여 DataService의 fetchData 메서드를 실행하려고 시도합니다. 그러나 메서드는 아직 클라이언트 A의 요청을 처리 중입니다.
+
+
+<br>
+대기 상태: 클라이언트 B는 클라이언트 A가 fetchData 메서드의 실행을 완료하고 반환되기를 기다립니다. 이는 메서드 호출을 처리하는 스레드의 수가 제한되어 있기 때문에 발생하는 현상입니다.
+
+<br><br>
+<br>스프링은 기본적으로 요청당 스레드를 할당하여 해당 요청을 처리합니다.
+<br>만약 한 스레드가 특정 메서드를 호출하여 작업 중이라면, 다른 스레드들은 그 메서드의 작업이 완료될 때까지 대기하게 됩니다.
+<br>이는 싱글톤 객체라고 해도 동시 접근 시 메서드 호출의 처리 순서를 보장하는 것이 아니라, 스레드의 동시성 관리에 의해 정해지는 부분입니다.
+<br><br>따라서 싱글톤 객체의 메서드가 데이터를 처리하는 데 오랜 시간이 걸릴 경우, 여러 스레드가 동시에 해당 메서드를 호출할 때, 일부 스레드는 다른 스레드의 작업이 완료될 때까지 대기하게 됩니다. 이는 스레드 동시성과 관련된 개념이며, 개발자는 이러한 상황을 고려하여 적절히 스레드 동기화나 비동기 처리를 구현해야 합니다.]]></description><link>&lt;4&gt;궁금증/오래걸리는singleton객체의-처리.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/오래걸리는Singleton객체의-처리.md</guid><pubDate>Sun, 30 Jun 2024 05:51:57 GMT</pubDate></item><item><title><![CDATA[자바에서 2차원 배열을 순회할때 행우선 방식으로 배열을 캐싱?]]></title><description><![CDATA[ 
+ <br><br>자바에서 2차원 배열을 순회할 때, 배열의 캐싱 동작은 JVM과 하드웨어의 캐시 메모리 구조에 따라 달라집니다. 자바는 배열을 행 우선(row-major) 방식으로 저장합니다. 따라서 행 우선 순회(row-major order)를 사용하는 것이 메모리 접근 패턴에 더 유리합니다.<br><br><br>for (int i = 0; i &lt; rows; i++) {
+    for (int j = 0; j &lt; cols; j++) {
+        process(array[i][j]);
+    }
+}
+복사<br><br>for (int j = 0; j &lt; cols; j++) {
+    for (int i = 0; i &lt; rows; i++) {
+        process(array[i][j]);
+    }
+}
+복사<br><br>
+<br>
+메모리 연속성: 2차원 배열이 내부적으로 1차원 배열로 저장될 때, 행 우선 방식으로 메모리에 배치됩니다. 따라서 행 우선 순회는 연속적인 메모리 접근을 의미하며, 이는 CPU 캐시 히트(cache hit)를 증가시키고, 메모리 접근 속도를 향상시킵니다.
+
+<br>
+캐시 효율성: CPU 캐시는 데이터의 공간 지역성(spatial locality)을 활용합니다. 행 우선 순회는 연속된 메모리 주소에 접근하므로, 한 번 로드된 캐시 라인에서 여러 데이터를 읽을 수 있습니다. 반면, 열 우선 순회는 메모리의 비연속적 접근을 초래하여 캐시 미스(cache miss)를 증가시킬 수 있습니다.
+
+<br><br>다음은 행 우선 순회와 열 우선 순회 간의 성능 차이를 보여주는 간단한 예제입니다:<br>public class MatrixTraversal {
+    private static final int SIZE = 1000;
+    private static final int[][] matrix = new int[SIZE][SIZE];
+
+    public static void main(String[] args) {
+        long start, end;
+
+        // 행 우선 순회
+        start = System.nanoTime();
+        rowMajorTraversal();
+        end = System.nanoTime();
+        System.out.println("Row-major traversal time: " + (end - start) + " ns");
+
+        // 열 우선 순회
+        start = System.nanoTime();
+        columnMajorTraversal();
+        end = System.nanoTime();
+        System.out.println("Column-major traversal time: " + (end - start) + " ns");
+    }
+
+    private static void rowMajorTraversal() {
+        for (int i = 0; i &lt; SIZE; i++) {
+            for (int j = 0; j &lt; SIZE; j++) {
+                matrix[i][j]++;
+            }
+        }
+    }
+
+    private static void columnMajorTraversal() {
+        for (int j = 0; j &lt; SIZE; j++) {
+            for (int i = 0; i &lt; SIZE; i++) {
+                matrix[i][j]++;
+            }
+        }
+    }
+}
+복사<br>위 코드를 실행하면 행 우선 순회가 열 우선 순회보다 일반적으로 더 빠른 것을 확인할 수 있습니다. 이는 행 우선 순회가 메모리의 연속적인 위치에 접근하여 캐시 효율성을 극대화하기 때문입니다.<br>따라서, 자바에서 2차원 배열을 순회할 때 행 우선 순회를 사용하면 메모리 접근 패턴이 더 효율적이며, 성능 최적화에 도움이 됩니다.]]></description><link>&lt;4&gt;궁금증/자바-2차원순환시-어떻게-캐싱.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/자바-2차원순환시-어떻게-캐싱.md</guid><pubDate>Thu, 13 Jun 2024 04:01:57 GMT</pubDate></item><item><title><![CDATA[C에서 구조체내부의 변수선언순서를 바꾸며 최적화하는데 자바도 이런게 있을까?]]></title><description><![CDATA[ 
+ <br><br>C 언어에서는 구조체 내부의 변수 선언 순서가 메모리 배치와 패딩(padding)에 영향을 미칠 수 있어 성능 최적화에 중요한 역할을 합니다. 이는 메모리 정렬(alignment)과 캐시 효율성 등과 관련이 있습니다. 하지만 자바에서는 구조체와 같은 개념은 없고, 클래스가 그 역할을 합니다. <br>자바에서 변수 선언 순서가 성능에 미치는 영향은 C 언어에 비해 상대적으로 적습니다. 이는 주로 자바의 메모리 관리와 JVM(Java Virtual Machine)의 역할 때문입니다. 자바에서는 다음과 같은 이유로 변수 선언 순서가 최적화에 미치는 영향이 제한적입니다:<br>
+<br>
+JVM의 메모리 관리: 자바 객체의 메모리 배치는 JVM에 의해 자동으로 관리됩니다. JVM은 객체의 필드를 최적화된 방식으로 배치할 수 있습니다. 따라서, 프로그래머가 직접 메모리 레이아웃을 제어할 수 없습니다.
+
+<br>
+가비지 컬렉션: 자바는 가비지 컬렉션을 사용하여 메모리를 관리합니다. 이는 메모리 관리의 복잡성을 줄여주지만, C처럼 메모리를 세밀하게 관리하는 최적화는 어렵게 만듭니다.
+
+<br>
+추상화 수준: 자바는 높은 수준의 추상화를 제공하며, 이는 메모리 관리와 관련된 저수준의 최적화가 덜 중요하게 만듭니다. 성능 최적화는 주로 알고리즘 개선, 효율적인 데이터 구조 사용, 그리고 JVM의 적절한 튜닝을 통해 이루어집니다.
+
+<br>하지만 자바에서도 변수 선언 순서가 전혀 영향을 미치지 않는 것은 아닙니다. 예를 들어, 자주 사용되는 필드나 작은 데이터 타입을 객체의 앞부분에 배치하면 JVM의 힙 메모리 접근 패턴에 따라 성능에 약간의 영향을 미칠 수 있습니다. 그러나 이러한 최적화는 매우 미세하며, 일반적으로 자바에서는 더 큰 성능 향상을 위해 다른 방법들이 더 효과적입니다.<br><br>
+<br>알고리즘 최적화: 더 효율적인 알고리즘을 사용하여 성능을 향상시킵니다.
+<br>데이터 구조 최적화: 적절한 데이터 구조를 선택하여 성능을 개선합니다.
+<br>JVM 튜닝: JVM 옵션을 조정하여 성능을 최적화합니다.
+<br>병렬 처리: 멀티스레딩이나 병렬 스트림 등을 사용하여 성능을 향상시킵니다.
+<br>프로파일링: 프로파일러를 사용하여 애플리케이션의 병목 지점을 찾고 최적화합니다.
+<br>결론적으로, 자바에서는 변수 선언 순서가 성능에 미치는 영향이 C 언어만큼 크지 않지만, 전체적인 성능 최적화를 위해 다양한 접근 방법을 사용할 수 있습니다.]]></description><link>&lt;4&gt;궁금증/자바-변수선언순서-최적화영향.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/자바-변수선언순서-최적화영향.md</guid><pubDate>Thu, 13 Jun 2024 04:01:21 GMT</pubDate></item><item><title><![CDATA[[카카오]"폭증하는 카카오톡 트래픽에 대처하는 방법"를 보고]]></title><description><![CDATA[ 
+ <br><br><a rel="noopener" class="external-link" href="https://youtu.be/U905BeDQ_BA?si=0aRKQvR_cHr075O" target="_blank">https://youtu.be/U905BeDQ_BA?si=0aRKQvR_cHr075O</a>_<br><br>와 초당 62만건의 메세지 트래픽이<br>
+와 초당 44800건의 메시지 전송 트래픽. 다른 모든 요청 합치면 620000건 와우.<br><br>
+<br>새해 인사
+<br>지진같은 자연재해
+<br>국가적 이벤트
+<br><br>채팅방의 다른 사용자가 나한테 메시지 보냄 -&gt; 난 다른일 중이라 카톡 서버에 미접속중 -&gt; 카톡 서버가 나한테 푸시 전송을 함-&gt;푸시받으면 깨어나면서  카톡 클라이언트는카톡 서버에 로그인 요청 -&gt; 로그인 요청하면 TCP연결을 맺은 상태로 유지-&gt;이러면 내가 다시 카톡을 켰을때 로그인 과정이 필요없이 바로 메시지를 확인 가능. 즉, 빠르게 메시지를 확인할 수 있군. 로그인을 미리했으니<br><br><br>지진대문에 푸시를 받으면 폰이 깨어남. 이때 카톡 클라이언트가 백그라운드 로그인을 위해 카톡 서버에 로그인 요청을함. 이때 문제가 전국민이 푸시를 받은 상황이라 카톡 서버에 전 국민의 로그인 요청이 겁나 온다. 평시는 카톡 푸시알림을 받거나 사용자가 카톡을 켤때 다른 푸시 받을때 로그인 요청이오는것임.<br><br>활성화된스레드 비율로 트래픽 폭증 인지. 지정된 비율을 넘어서면 백그라운드 로그인 차단 비율을 높이고, 재시도 횟수도 제한 시킨다.<br>불필요한, 카톡이 의도치 않은 백그라운드 로그인 시도 방지 및 차단<br>요청 별 로그인 요청,<br>
+그니까 무거운 로그인 요청의 한계 스레드를 설정해서 특정 요청이 스레드를 오래 가지는 문제점을 해결. 그런데 이러면 로그인이 늦게되는데 괜찮은가? 어떻게 균형을 잡지? 아~ 하나의 요청이 다른 요청을 방해하는걸 방지하는 거구나. 스레드는 한정된 자원이니깐. 속도는 좀 느려져도 서버 장애는 방지할 수 있으니. 처리 실패(메시지 전송 같은) 는 증가 but 장애 방지!<br>당장 필요한 ㅡㅌ패 처리하는 게 중요하다<br>
+자원을 요청별로 배분해 특정 요청이 점유하지 않게 해야한다<br>
+트래픽 처리를위해 개섢라 여지는 많이 남아 있다<br><br>실제 개발자가 하는 일을 구체적으로 들을수 있어 좋았음. 들으면서 어느정도 이해가 가서 스스로 좀 성장한거 같아 뿌듯함 ^ . ^]]></description><link>&lt;4&gt;궁금증/카카오-카톡트래픽대처.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/카카오-카톡트래픽대처.md</guid><pubDate>Wed, 22 May 2024 06:55:06 GMT</pubDate></item><item><title><![CDATA[코루틴을 사용이유와 예시]]></title><description><![CDATA[ 
+ <br><br><br>코루틴(coroutine)은 비동기 프로그래밍을 위한 중요한 개념으로, 특히 I/O 작업이나 네트워크 요청 등 시간이 많이 걸리는 작업을 효율적으로 처리하기 위해 사용됩니다. 코루틴을 사용하는 이유와 실사용 예시는 다음과 같습니다.<br><br>
+<br>
+비동기 작업의 효율적인 처리:
+
+<br>일반적인 동기적 프로그래밍에서는 시간이 오래 걸리는 작업(예: 파일 읽기/쓰기, 네트워크 요청 등)을 수행하는 동안 다른 작업을 수행할 수 없습니다. 코루틴을 사용하면 이러한 작업을 비동기적으로 처리하여 프로그램의 응답성을 높일 수 있습니다.
+
+
+<br>
+자원 절약:
+
+<br>코루틴은 스레드보다 가벼운 단위로, 수천 개의 코루틴을 실행해도 메모리와 CPU 자원을 효율적으로 사용할 수 있습니다. 반면, 스레드는 시스템 자원을 많이 소모합니다.
+
+
+<br>
+코드 가독성 향상:
+
+<br>콜백(callback) 기반의 비동기 프로그래밍은 코드가 복잡해지고 가독성이 떨어질 수 있습니다. 코루틴은 동기 코드와 유사한 형태로 작성되므로 가독성이 높아지고 유지보수가 쉬워집니다.
+
+
+<br><br>
+<br>
+파이썬에서의 코루틴 사용 예시 (asyncio)
+import asyncio
+
+async def fetch_data():
+    print("Fetching data...")
+    await asyncio.sleep(2)  # 네트워크 요청을 시뮬레이션
+    print("Data fetched!")
+    return {"data": "sample"}
+
+async def main():
+    result = await fetch_data()
+    print(f"Result: {result}")
+
+asyncio.run(main())
+복사
+이 예제에서 fetch_data 함수는 네트워크 요청을 시뮬레이션하기 위해 asyncio.sleep을 사용합니다. await 키워드를 사용하여 다른 작업을 차단하지 않고 비동기적으로 처리할 수 있습니다. main 함수에서 fetch_data를 호출하고 그 결과를 출력합니다.
+
+<br>
+자바스크립트에서의 코루틴 사용 예시 (async/await)
+async function fetchData() {
+    console.log("Fetching data...");
+    await new Promise(resolve =&gt; setTimeout(resolve, 2000));  // 네트워크 요청을 시뮬레이션
+    console.log("Data fetched!");
+    return { data: "sample" };
+}
+
+async function main() {
+    const result = await fetchData();
+    console.log(`Result: ${result.data}`);
+}
+
+main();
+복사
+이 자바스크립트 예제에서 fetchData 함수는 setTimeout을 사용하여 네트워크 요청을 시뮬레이션합니다. await 키워드를 사용하여 비동기 작업이 완료될 때까지 기다리며, main 함수에서 fetchData의 결과를 받아 출력합니다.
+
+<br>
+Kotlin에서의 코루틴 사용 예시
+import kotlinx.coroutines.*
+
+suspend fun fetchData(): Map&lt;String, String&gt; {
+    println("Fetching data...")
+    delay(2000)  // 네트워크 요청을 시뮬레이션
+    println("Data fetched!")
+    return mapOf("data" to "sample")
+}
+
+fun main() = runBlocking {
+    val result = fetchData()
+    println("Result: ${result["data"]}")
+}
+복사
+Kotlin에서는 suspend 키워드를 사용하여 코루틴 함수를 정의합니다. delay 함수를 사용하여 비동기 작업을 시뮬레이션하며, runBlocking 블록 내에서 fetchData를 호출하여 결과를 출력합니다.
+
+<br><br>코루틴은 비동기 작업을 효율적으로 처리하고 자원을 절약하며, 코드의 가독성을 높이는 데 매우 유용합니다. 다양한 프로그래밍 언어에서 코루틴을 지원하며, 각 언어에 맞는 방식으로 비동기 프로그래밍을 구현할 수 있습니다.]]></description><link>&lt;4&gt;궁금증/코루틴-사용예-왜쓰나/코루틴-사용예-왜쓰나.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/코루틴-사용예-왜쓰나?.md</guid><pubDate>Sat, 25 May 2024 14:18:07 GMT</pubDate></item><item><title><![CDATA[[토스]"인자가 많은 메서드는 왜 나쁠까?"를 읽고]]></title><description><![CDATA[ 
+ <br><br>이 글에서 제시하는 메서드 인자가 11개나 되는 코드 예시<br>class Mail(
+// ...
+) 
+{
+	fun send(
+		phoneFallback: Boolean?,
+		phoneNumber: String?,
+		isForceSend: Boolean?,
+		recipient: String,
+		id: Long,
+		mailDomainFilterService:MailDomainFilterService?,
+		mailRetryService: MailRetryService?,
+		title: String,
+		body: String,
+		param: Map&lt;Any, Any&gt;,
+		reservedAt: Instant?,
+	)
+}
+복사<br>호출할때 코드<br>mail.send(
+  phoneFallback = null,
+  phoneNumber = null,
+  isForceSend = null,
+  recipient = "jaeeun.na@tosspayments.com",
+  id = -1,
+  mailDomainFilterService = null,
+  mailRetryService = null,
+  title = "안녕하세요",
+  body = "메일 본문입니다",
+  param: emptyMap(),
+  reservedAt: null,
+)
+
+복사<br>문제점<br>
+<br>필수 인자가 너무 많다
+<br>잘 모르는 인자, 사용할 필요 없는 인자에 null을 일일히 넣어야 한다<br>
+이런 상황에서 나라면 이 코드를 작성한 사람에게 물어보거나, 이미 사용중인 코드가 있다면 참고할거 같은데 이러면 따라한 방법이 옳은지 어떻게 점검할 지에대한 문제점이 생긴다. 따끔한 해결책이 없다. 이 문제는 애초에 발생 안하도록 근본적인 해결책이 필요하다.
+<br><br><br>phoneFallback은 메일 발송이 실패시 메일의 내용을 문자로 대신 보내기 위한 인자. 이 인자 때문에 phoneNumber인자가 존재함. 즉, phoneFallback이 true이면 phoneNumber로 메일이 문자로 전송되는 것임! 이 두 인자는 항상 같이 사용된다. 이를 코드에 반영하면<br>// 아래 두 변수가 둘 다 null이거나, 둘 다 null이 아니어야 한다는 사실을
+// 더 이상 기억하고 있을 필요가 없다  
+data class FallbackFeatureOption(
+  val phoneFallback: Boolean,
+  val phoneNumber: String,
+)
+
+class Mail(
+  // ...
+) {
+  fun send(
+    fallbackFeatureOption: FallbackFeatureOption?,    
+    isForceSend: Boolean?,
+    recipient: String,
+    id: Long,
+    mailDomainFilterService: MailDomainFilterService?,
+    mailRetryService: MailRetryService?,
+    title: String,
+    body: String,
+    param: Map&lt;Any, Any&gt;,
+    reservedAt: Instant?,
+) { 
+	sendInternal(
+      phoneFallback = fallbackFeatureOption?.phoneFallback,
+      phoneNumber = fallbackFeatureOption?.phoneNumber,
+      isForceSend = isForceSend,
+      recipient = recipient,
+      id = id,
+      mailDomainFilterService = mailDomainFilterService,
+      mailRetryService = mailRetryService,
+      title = title,
+      body = body,
+      param = param,
+      reservedAt = reservedAt,
+    )
+  }
+
+  @Deprecated("이 메서드는 너무 인자가 많아서 코드를 이해하기 어렵습니다. 다른 send() 메서드를 사용하세요.")
+  fun sendInternal(
+  	phoneFallback: Boolean?,
+      phoneNumber: String?,
+      isForceSend: Boolean?,
+      recipient: String,
+      id: Long,
+      mailDomainFilterService: MailDomainFilterService?,
+      mailRetryService: MailRetryService?,
+      title: String,
+      body: String,
+      param: Map&lt;Any, Any&gt;,
+      reservedAt: Instant?,
+    ) { ... }
+}
+복사<br>phoneFallback, phoneNumber인자를 fallbackFeatureOption로 통일 시킴.<br>여기에 fallbackFeatureOption인자에 아직도 null을 넣기 싫어서 그냥 메서드로 빼버릴 수 있다. 다음 코드는 메서드로 빼버린 코드<br>// fallbackFeatureOption 인자를 삭제했다
+fun send(
+  // ... 
+) {
+  sendInternal(
+    phoneFallback = null,
+    phoneNumber = null,
+    // ...
+  )
+}
+
+// 메서드 이름으로 의도를 표현했다
+fun sendWithFallback(
+  fallbackFeatureOption: FallbackFeatureOption, // non-nullable
+  // ...
+) {
+  sendInternal(
+    phoneFallback = fallbackFeatureOption.phoneFallback,
+    phoneNumber = fallbackFeatureOption.phoneNumber,
+    // ...
+  )
+}
+복사<br>오~ 메서드 인자(파라미터)가 개선되었다. 메서드 이름을 통해서 의도가 더 명확히 전달되어서 좋은 듯.<br><br>이번엔 isForceSend에 대해서! isForcedSend는 메일 수신을 거부한 메일 주소에도 발송 기록을 남겨야하는 정책때문에 사용하는 인자이다. isForcedSen = true로 하면 수신 거부한 주소에도 발송 했다는 메일이 발송되는것! 아마 다른 주소를 활용해서 발송하는거겠지? 이미 기존의 주소는 차단당했으니...<br>이메일 수신 거부 목록은 디비에 있고 MailDomainFilterService에서 디비에 접근해서 발송할지 결정한다.<br>class MailDomainFilterService {
+  fun isFiltered(domain: String): Boolean { 
+    // database 에서 목록을 가져온 뒤, 발송 여부 결정
+  }
+}
+복사<br>isForcedSend = true면 위 코드가 필요가 없다. 왜냐하면 차단되어 있어도 무조건 강제로 메일을 보내기 때문!<br>이제 1번째 처럼 메서드로 빼본다.<br>class Mail(
+  private val mailDomainFilterService: MailDomainFilterService,
+) {
+  fun send(
+    // ... 
+  )
+
+  fun sendWithFallback(
+    // 기존과 동일
+  )
+ 
+  fun sendWithFallbackAndForced(
+    fallbackFeatureOption: FallbackFeatureOption?,   
+    recipient: String, 
+    id: Long,
+    mailRetryService: MailRetryService?,
+    title: String,
+    body: String,
+    param: Map&lt;Any, Any&gt;,
+    reservedAt: Instant?,
+  ) { 
+    sendInternal(
+      phoneFallback = fallbackFeatureOption?.phoneFallback,
+      phoneNumber = fallbackFeatureOption?.phoneNumber,
+      isForceSend = true,
+      recipient = recipient,
+      id = id,
+      mailDomainFilterService = null,
+      mailRetryService = mailRetryService,
+      title = title,
+      body = body,
+      param = param,
+      reservedAt = reservedAt,
+    )
+  }
+}
+복사<br>sendWithFallbackAndForced가 등장! 그런데 이건 1번에서 추가된 isForceSend와 기능이 겹친다. 현재 다음과 같은 5개의 메서드가 만들어져야 하는 상황이다.<br>
+<br>send()
+<br>sendInteanl()
+<br>sendWithFallbackAndForced()
+<br>sendWithFallback()
+<br>sendWithForce()<br>
+기능들이 더 추가되면 메서드가 엄청 길고 엄청 많아질것이다. 이러면 안된다.
+<br>연관 없는 메서드들은 독립적으로 사용하도록 만든 코드<br>class Mail(
+  private val mailDomainFilterService: MailDomainFilterService
+) {
+  private var enableForceSendFeatureForCompliancePurpose: Boolean = false
+  private var smsFallbackFeatureOption: SmsFallbackFeatureOption? = null
+
+  fun enableSmsFallbackFeature(smsFallbackFeatureOption: SmsFallbackFeatureOption): Mail {
+    this.smsFallbackFeatureOption = smsFallbackFeatureOption
+    return this
+  }
+
+  // isForceSend 라는 이름에서, 조금 더 서술적인 이름으로 변경했다.
+  fun enableForceSendFeatureForCompliancePurpose(): Mail { 
+    this.enableForceSendFeatureForCompliancePurpose = true
+    return this
+  }
+
+  fun send(
+    id: Long,
+    recipient: String,
+    mailRetryService: MailRetryService?,
+    title: String,
+    body: String,
+    param: Map&lt;Any, Any&gt;,
+    reservedAt: Instant?,
+  ) {
+    // 이제 인자가 아닌 객체 필드에서 값을 얻어올 수 있다.
+    sendInternal(
+      phoneFallback = this.smsFallbackFeatureOption?.phoneFallback,
+      phoneNumber = this.smsFallbackFeatureOption?.phoneNumber,
+      isForceSend = this.enableForceSendFeatureForCompliancePurpose,
+      recipient = recipient,
+      id = id,
+      mailDomainFilterService = if (this.enableForceSendFeatureForCompliancePurpose) {
+        this.mailDomainFilterService
+      } else {
+        null
+      },
+      mailRetryService = mailRetryService,
+      title = title,
+      body = body,
+      param = param,
+      reservedAt = reservedAt,
+    )
+  }
+}
+복사<br>다음 코드는 의미가 뒤섞여 사용하기 어색했던 SmsFallbackFeatureOption클래스 개선한 코드.<br>// sms fallback 기능을 사용하겠다고 했는데 true를 입력하는게 어색하다. 
+mail
+  .enableSmsFallbackFeature(SmsFallbackFeatureOption(true, "010-1234-5678"))
+  .send(...)
+
+// sms fallback 기능을 사용하겠다고 했는데 false를 입력하면 어떻게 되는거지...?
+mail
+  .enableSmsFallbackFeature(SmsFallbackFeatureOption(false, "???"))
+  .send(...)
+복사<br>불필요한 인자를 삭제하고, 이름을 개선하면<br>class Mail(
+  private val mailDomainFilterService: MailDomainFilterService
+) {
+  private var enableForceSendFeatureForCompliancePurpose: Boolean = false
+  private var smsFallbackFeaturePhoneNumber: String? = null
+
+  fun enableSmsFallbackFeature(smsFallbackFeaturePhoneNumber: String): Mail {
+    this.smsFallbackFeaturePhoneNumber = smsFallbackFeaturePhoneNumber
+  }
+
+  fun enableForceSendFeatureForCompliancePurpose(): Mail { 
+    this.enableForceSendFeatureForCompliancePurpose = true
+  }
+
+  fun send(
+    id: Long,
+    recipient: String,
+    mailRetryService: MailRetryService?,
+    title: String,
+    body: String,
+    param: Map&lt;Any, Any&gt;,
+    reservedAt: Instant?,
+  ) {
+    sendInternal(
+      phoneFallback = this.smsFallbackFeaturePhoneNumber != null,
+      phoneNumber = this.smsFallbackFeaturePhoneNumber,
+      isForceSend = this.enableForceSendFeatureForCompliancePurpose,
+      recipient = recipient,
+      id = id,
+      mailDomainFilterService = if (this.enableForceSendFeatureForCompliancePurpose) {
+        this.mailDomainFilterService
+      } else {
+        null
+      },
+      mailRetryService = mailRetryService,
+      title = title,
+      body = body,
+      param = param,
+      reservedAt = reservedAt,
+    )
+  }
+}
+복사<br>이제는 사용자가 깊이 고민 하지 않아도 된다. 편리하게 사용가능. mail 객체에 .만 찍으면 intelliJ에서 사용가능한 메서드가 나오는데 이때 메서드 이름을 보고 유추가 가능하게됨! 아래는 사용예시<br>mail
+  .enableSmsFallbackFeature("010-1234-5678")  // 이 메서드를 호출하지 않아도 괜찮다
+  .enableForceSendFeatureForCompliancePurpose()  // 이 메서드를 호출하지 않아도 괜찮다
+  .send(...)
+복사<br><br>이제 send()에 어떤 인자가 들어갈지 상상이 된다. 최종 형태<br>class Mail(
+  private val mailDomainFilterService: MailDomainFilterService,
+  private val mailRetryService: MailRetryService,
+  private val param: Map&lt;Any, Any&gt;?,
+) {
+  private var enableForceSendFeatureForCompliancePurpose: Boolean = false
+  private var smsFallbackFeaturePhoneNumber: String? = null
+  private var scheduleSendReservedAt: Instant? = null
+  private var enableRetryFeature: Boolean = false
+
+  fun enableSmsFallbackFeature(smsFallbackFeaturePhoneNumber: String): Mail {
+    this.smsFallbackFeaturePhoneNumber = smsFallbackFeaturePhoneNumber
+  }
+
+  fun enableForceSendFeatureForCompliancePurpose(): Mail { 
+    this.enableForceSendFeatureForCompliancePurpose = true
+  }
+
+  fun enableScheduleSendFeature(reservedAt: Instant): Mail { 
+    this.scheduleSendReservedAt = reservedAt 
+  }
+
+  fun enableRetryFeature(): Mail { 
+    this.enableRetryFeature = true
+  }
+
+  fun send(
+    recipient: String,
+    title: String,
+    body: String,
+  ) {
+    sendInternal(
+      phoneFallback = this.smsFallbackFeaturePhoneNumber != null,
+      phoneNumber = this.smsFallbackFeaturePhoneNumber,
+      isForceSend = enableForceSendFeatureForCompliancePurpose,
+      id = Random.nextLong(),  // 내부 구현에서 랜덤으로 생성해서 사용함
+      mailDomainFilterService = if (this.enableForceSendFeatureForCompliancePurpose) {
+        this.mailDomainFilterService
+      } else {
+        null
+      },
+      mailRetryService = if (this.enableRetryFeature) {
+        this.mailRetryService
+      } else {
+        null
+      },
+      title = title,
+      body = body,
+      param = emptyMap(),
+      reservedAt = this.scheduleSendReservedAt,      
+  }
+
+  fun templateSend(
+    recipient: String,
+    title: String,
+    body: String,
+    param: Map&lt;Any, Any&gt;
+  ) {
+    sendInternal(
+      // ...
+      param = param
+      // ...
+    )
+  }
+}
+복사<br>setIntenal메서드 구현부분을 전혀 건드리지 않고도 내가 원하는 값만 넣을 수 있도록 변경됨. 코드 읽기, 사용이 편리해짐<br>사용하는 코드<br>// 가장 간단하게 사용할 때
+mail.send(
+  recipient = "jaeeun.na@tosspayments.com",
+  title = "안녕하세요",
+  body = "메일 본문입니다"	
+)
+
+// 지원하는 모든 기능을 사용할 때
+mail
+  .enableSmsFallbackFeature("010-1234-5678")
+  .enableForceSendFeatureForCompliancePurpose()
+  .enableScheduleSendFeature(Instant.now().plus(Duration.ofHours(2)))
+  .enableRetryFeature()
+  .send(
+    recipient = "jaeeun.na@tosspayments.com",
+    title = "안녕하세요",
+    body = "메일 본문입니다"
+  )
+복사<br>다음글은 이해가 잘 안감. Mail생성자에 의존성이 생겼다? 다시 볼때 더 생각해보기<br>
+Mail 생성자에 의존성이 생겼으니 조삼모사가 아니냐고 반문할 수도 있겠네요. 함수 인자에 의존성을 주입하는 것은 코드 사용자에게 부담을 주지만, 객체에서 의존성을 관리하면 코드 작성자가 그 부담을 감당할 수 있어요. 코드 사용자 입장에서는 더 편리해지죠. 중복으로 호출되던 의존성 주입 코드를 한곳으로 모은 효과도 있고, 객체 간의 표현도 더 풍부해졌죠.
+<br><br>
+<br>메일을 보내기 위해 mail.send() 메서드를 재사용하려고 했다.
+<br>사용자에게 친절하지 않은 코드 때문에 mail.send()를 사용하기 위해 너무 많은 맥락을 알아야만 했다.
+<br>팀 내부의 도메인 지식을 습득했다.
+<br>습득한 지식을 가지고 코드를 개선했다.<br>
+여기서 가장 중요한 점은 다른 팀원들이 도메인 지식을 학습하지 않아도 되도록 코드를 리팩토링 한 사실! 만든 개발자만 이해할 수 있는 코드는 좋은 코드가 아니다.
+<br>리팩토링후 달라진 상황<br>
+질문: 이 프로젝트에서 메일을 보내려면 어떻게 해야 해요?<br>
+<br>Before: 일단 Mail 클래스의 send() 메서드 통해서 보낼 수 있는데요, id는 꼭 랜덤하게 넣어야 하고요, 예약 메일이 아니면 reservedAt 에 null을 넣으세요. 아, 혹시 수신자 메일 도메인이 어떻게 되나요? 강제로 보내야 할 때가 있어서요.
+<br>After: Mail 클래스가 제공하는 공개 메서드 목록을 보세요.
+<br><br>kotlin 코드를 처음보긴 했는데 그냥 Java로 생각하고 읽으니 읽히기는 한거 같은데 처음 보는 문법이 있어 이해가 좀 안되는 부분은 있음. 하지만 개발자로서 도메인 지식이 없어도 타 개발자가 사용가능한 코드를 어떻게 개발하고 왜 중요한지에 대해 학습할 수 있었음. <br>그냥 글을 쭉 읽기 보다는 이런 식으로 타이핑하며 스스로 재구조화 하며 읽으니 더 이해가 잘 되는 듯함. 굳!]]></description><link>&lt;4&gt;궁금증/토스-많은인자.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/토스-많은인자.md</guid><pubDate>Wed, 22 May 2024 06:55:12 GMT</pubDate></item><item><title><![CDATA[[토스]DB과부하 방지 팁]]></title><description><![CDATA[ 
+ <br><br>24.03.07<br><br>
+<br>db시스템은 확장을 하기 어렵다는데 왜?
+<br>CAP이론 읽어보자. <a rel="noopener" class="external-link" href="https://www.ibm.com/kr-ko/topics/cap-theorem" target="_blank">https://www.ibm.com/kr-ko/topics/cap-theorem</a>
+<br>가급적 디비의 부하를 최소화해서 확장 필요성 줄이는게 바람직. 이를 위해 캐시(레디스, 멤캐시드)를 이용!
+<br>높은 캐시 히트율통한 트래픽처리시 db에 부담을 줄임. 
+<br>캐시가 동시에 다량으로 만료되도록 설계하면 만료가 되고 캐시 쇄도(cache stampede)라고하는 캐시 미스가 대량으로 발생함으로서 db에 부담이 될수있음 
+
+<br>해결방법: 지터(Jitter)사용. 캐시 만료 시간을 무작위로 지연시키는 방법. 지터=짧은 지연 시간
+
+
+<br>캐시에서 null이 반환되어 db서버에서 조회를 했는데도 null이 반환되었는데 이를 캐시 안하도록 구현하는 경우가 흔하다함. null도 값이 없다라는 정보임. 이런 상황을 캐시 관통(cache penetration)이라함. 이러면 db에 불필요한 쿼리요청 계혹 발생함. 캐시를 미들웨어로 두었는데도 부하 분담을 안해주는 상황
+
+<br>해결방법: Null Object Pattern을 사용. 검색해보니 구현방법이 다양하다. null을 처리하는 정책을 수립하는것이라 이해되는데...
+
+
+<br>블룸 필터가 뭐지?
+<br>캐시 시스템이 장애가 났을때는 어떻게하지?
+
+<br>해결방법: 대체 작동(Failover), 핵심 서비스 기능과 그 외 기능을 구별해서 핵심 서비스만 일단 동작하도록 하기. 캐시 없는 db가 트래픽을 다 처리할수 있을지 어떻게 확신할 수 있겟는가? 이런 상황도 가정해서 서비스의 기능들을 분류해놓는게 현명할듯함.
+
+
+<br>핫키란 많은 요청이 집중되는 키
+<br>핫키가 만료되는 그 순간에 여러 요청이 올수 있다(블로그에 있는 그림을 보면 더 확실히 상황이해가 가능하다). 이를 방지 하려면 만료 기한을 없애거나, 백그라운드에서 주기적으로 새 값을 갱신하여 만료 안되게할 수 있지만, 핫키가 상황에 따라 바뀌는 환경에서는 더 이상 핫키가아닌 키를 위해 이런일을 하여 리소스를 낭비 할 수 있다.
+
+<br>해결방법: 분산 락(distributed lock), 캐시를 애플리케이션 서버간 공유자원으로 바라볼 수있다. 캐시 미스가 발생했을때 락을 걸고 캐싱후 락을 해재함으로써, 단 한번의 캐시 쓰기만 하면 되는것.
+
+
+<br>레디스는 분산 락 적용이 쉽다. 레디스의 싱글 스레드 특징을 활용한 레드락 알고리즘 덕분. 레드락 알고리즘 알아보기!
+<br><br><a rel="noopener" class="external-link" href="https://toss.tech/article/cache-traffic-tip" target="_blank">https://toss.tech/article/cache-traffic-tip</a>]]></description><link>&lt;4&gt;궁금증/토스-db과부하방지팁.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/토스-db과부하방지팁.md</guid><pubDate>Wed, 22 May 2024 06:55:16 GMT</pubDate></item><item><title><![CDATA[[토스]"은행 최초 코어뱅킹 MSA 전환기 (feat. 지금 이자 받기)"를 보고]]></title><description><![CDATA[ 
+ <br><br><a rel="noopener" class="external-link" href="https://youtu.be/amTJyIE1wO0?si=BDRdAN0Ct10jZ31S" target="_blank">https://youtu.be/amTJyIE1wO0?si=BDRdAN0Ct10jZ31S</a><br><br><br>
+<br>1개의서버 1개의 DB라서 네트워크 구조 단순해 트랜잭션 처리 유리
+<br><br>
+<br>트래픽이 몰렸을 때 특정 코어뱅킹 서버만 스케일아웃하는 전략 불가능
+<br>한개의 서버러 장애가 하나 발행했는데 다른 기능에 영향을 미칠 수 있어 위험. 단일 장애 지점으로 전 업무가 마비될 수 있다.
+<br>대량의 트래픽을 안정적으로 운영하는데 한계.
+<br><br>
+<br>모바일, 대량 트래픽에 특화된 마으코로서비스 아키텍쳐
+<br>매일 70만명이 이자 받기 서비스 이용.
+<br>기존의 모놀리식에서 피크타임 트래픽때문에 문제가 생기기도 함
+<br>마이크로 서비스 아키텍처를 이용하면 지급 도메인을 스케일아웃 가능
+<br>장애전파를 막기 가능
+<br><br><br>쿠버네티스, 스프링부트, 코틀린, JPA, 비동기 메시지 처리와 캐싱위해 카프카, 레디스<br>
+API호출을 통해 비즈니스 의존성을 느슨하게 할 수 있구나. 도메인별로 호출할거니가
+<br><br><br>
+<br>잔액을 갱신하는 트랜젝션 채널(폰송금, 폰 이자 지금받기, 폰 예금해지, ATM, 각 은행 창구 등) 엄청 많다.
+<br>일반적으로 사용되는 Redis Global Lock만으로는 은행 시스템에서 동시성 제어 이슈 어렵다(왜?)
+<br>적절히 동시정 제어 안될 때의 문제
+
+<br>9분부터 설명함. 이거 쉬운코딩에서 강의 했던거
+<br>select, commit
+<br>JPA의 @Lock을 추가해서 해결(wait &amp; retry) 디비락쓴거
+<br>주의) 락을 잡아야하는 데이터를 명확히 식별, 갱신하는 데이터에 대해서만 락을 획득해야 데드락, 성능저하 얘방가능하다.
+
+
+<br><br>
+<br>카프카잘 모름 일단 정리
+<br>카프카로 비동기 트랜잭션 구현
+<br>카프카로  트랜잭션 분리가 가능한듯...
+<br>(기존)지금 이자 받기 트랜잭션: 80회의 DML -&gt; (개선)지금 이자 받기 트랜잭션: 50회, 세금 DML: 30회
+<br>세금은 즉시 안해도되서 분리
+<br><br><br>
+<br>RDB기반 사용
+<br>하루에 1번만 이자 계산 하면 되는 상황. 즉 1번만 DB i/o하면됨
+<br>기존에는 이자계산 위한  DB i/o 발생 -&gt; 하루중 처음으로 계좌상세탭에 접근할때에만 DB에 접근하도록 구현 
+<br>예상되는 이자 조회 결과를 레디스에 캐싱하도록 구현. 하루 2번이상 계좌상세탭에 접근시 미리 레디스에 저자오디있던 이자 계산 결과를 리턴하게함. 그래서 DB 리소스 낭비 예방
+<br>이자 만료 일자도 하루로 두어 어제의 이자금액이 반환되는 문제도 원천적으로 방지. 매일 자정이후 처음 접근 할때만 캐싱!
+<br><br>
+<br>데이터정합성이 일치하는지 확인.
+<br>코어뱅킹서버에서 이자 지급 마이크로서버가 분화. 이 둘의 이자가 동일한지 정합성확인이 요구됨. 
+<br>거래가 발생시 실시간으로 코어뱅킹과 이자서버에 동시에 api호출. 둘 값이 불일치하면 모니터링 채널에 알림받고 원인학인후 로직 수정
+<br>Stageing환경? 실제 운여환경과 동일하게 구성된 내부 API테스틍ㅇ 황경. 으로 테스트.로직 수정 반복
+<br>예외케이스 테스트도 실행
+
+<br>잔액 구간 분리, 고객 상태별, 계좌상태 , 출급 입금정지상태 각각의 테스트케이스 
+
+
+<br>
+아 이렇게 모니터링이 완료되면 이제야 이자 api를 완전히 전환시키면디는군.<br>
+모니터링을 엄청나게 하는구나~ 수신개발팀-&gt;내부팀원-&gt;일부고객-&gt;전체고객
+<br><br>API를 한번에 전환했을때 만약 문제가 발생하면 복구 어렵기 때문에. 순차 배포 전략을 통해 API 트래픽을 점차 늘려가는 형태로 서비스를 전환시킴.<br>
+99%-1% -&gt; 90%-10% -&gt; 50%-50% -&gt; 10%-90% -&gt; 0%-100%<br>시스템을 중지(빅뱅 배포 방식)시키지않고 배포할수있다<br><br>
+<br>코어뱅킹서버로 부터 별도의 서버 구축. 독립적 서비스 가능
+<br>코어뱅킹서버에 부하가 생겨도 시스템 안정성 향상
+<br>다른 서버에서도 이 서버 사용할수잇어 더 유연하고 확장성있는 상품 개발이 가능해짐
+<br>10만-&gt;2천 레거시코드 청산 -&gt; 가독성 유지보수업성능개선!!! 
+<br>코어뱅킹서버 MCI 소요시간-&gt;이자 지급 마이크로 서버 API 소요시간
+
+<br>(평균소요시간) 250ms -&gt; (평균소요시간)7ms, 40배개선 
+<br>(최대소요시간) 1.72초 -&gt; (최대소요시간) 11ms, 약 170배 개선
+
+
+<br><br>
+<br>코어뱅킹 계정계 시스템의 세대전환
+<br>오픈소스 기반의 개발환경변화에 따른 개발 유연성 및 확장성 증가
+<br>지금 이자 받기 거래의 성능 170배 개선
+<br>계정계 서버로 부터 독립적인 서브를 구축함으로서 안정성 증가
+<br>지금 이자 받기 피크타임 트래픽에도 개별적으로 이자 지급 서버 스케일 아웃 가능
+<br>도메인 단위로 분리해 효율적 MSA코어뱅킹 시스템 구축
+<br>빅뱅 배포방식 탈피해 무중단 시스템 전환 가능
+<br><br>지금 이자 받기 서비스 자주 쓰는데 이거에 대한 내용이라 재미있었음.<br>
+서비스 되는 도메인영역을 잘 파악하는게 정말 중요할듯. 모놀리식에 포함된 기능들을 마이크로서비스로 추출할때 도메인 모르면 제대로 기능 분리에 어려움을 겪을듯.]]></description><link>&lt;4&gt;궁금증/토스-msa전환기.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/토스-msa전환기.md</guid><pubDate>Wed, 22 May 2024 06:55:19 GMT</pubDate></item><item><title><![CDATA[Java에서 함수형 인터페이스 왜 사용?]]></title><description><![CDATA[ 
+ <br><br>
+<br>
+람다 표현식의 사용: 함수형 인터페이스는 단 하나의 추상 메서드만을 가지므로, 이를 통해 람다 표현식을 사용할 수 있습니다. 람다 표현식은 간결한 코드 작성을 가능하게 하고, 익명 내부 클래스의 번잡함을 줄여줍니다.
+// 함수형 인터페이스
+@FunctionalInterface
+interface MyFunction {
+    void myMethod();
+}
+
+// 람다 표현식을 사용한 구현
+MyFunction function = () -&gt; System.out.println("Hello, world!");
+function.myMethod();  // 출력: Hello, world!
+복사
+
+<br>
+간결하고 가독성 높은 코드: 람다 표현식과 함수형 인터페이스를 사용하면 코드가 더 간결해지고 가독성이 높아집니다. 특히 콜백 메서드나 이벤트 핸들러와 같은 경우에 유용합니다.
+// 기존 익명 클래스 사용
+new Thread(new Runnable() {
+    @Override
+    public void run() {
+        System.out.println("Thread is running");
+    }
+}).start();
+
+// 람다 표현식 사용
+new Thread(() -&gt; System.out.println("Thread is running")).start();
+복사
+
+<br>
+지연 연산 및 스트림 처리: 자바 8에서 도입된 스트림 API와 함께 사용되며, 지연 연산(lazy evaluation)을 통해 성능을 최적화할 수 있습니다. 함수형 인터페이스는 스트림 연산 (map, filter, reduce 등)에서 중요한 역할을 합니다.
+List&lt;String&gt; names = Arrays.asList("Alice", "Bob", "Charlie");
+List&lt;String&gt; filteredNames = names.stream()
+                                  .filter(name -&gt; name.startsWith("A"))
+                                  .collect(Collectors.toList());
+복사
+
+<br>
+병렬 처리의 용이성: 스트림 API를 통해 함수형 인터페이스를 사용하면 병렬 처리를 더 쉽게 구현할 수 있습니다. parallelStream() 메서드를 사용하면 간단하게 병렬 스트림을 생성할 수 있습니다.
+List&lt;String&gt; names = Arrays.asList("Alice", "Bob", "Charlie");
+List&lt;String&gt; filteredNames = names.parallelStream()
+                                  .filter(name -&gt; name.startsWith("A"))
+                                  .collect(Collectors.toList());
+복사
+
+<br>
+테스트 용이성: 함수형 인터페이스를 사용하면 테스트가 더 쉬워집니다. 모의 객체(mock object)를 간단하게 생성하여 테스트할 수 있습니다.
+// 함수형 인터페이스
+@FunctionalInterface
+interface Calculator {
+    int calculate(int a, int b);
+}
+
+// 테스트 코드에서 람다 사용
+Calculator add = (a, b) -&gt; a + b;
+assert add.calculate(2, 3) == 5;
+복사
+
+<br>
+기능의 모듈화: 함수형 인터페이스를 사용하면 코드를 더 모듈화할 수 있으며, 재사용성과 유지보수성을 높일 수 있습니다. 
+
+<br>이러한 이유들 때문에 함수형 인터페이스는 자바에서 매우 유용하게 사용됩니다. 특히 자바 8 이후로 함수형 프로그래밍 패러다임이 강조되면서 함수형 인터페이스의 중요성은 더욱 커졌습니다.]]></description><link>&lt;4&gt;궁금증/함수형인터페이스-왜-사용.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/함수형인터페이스-왜-사용.md</guid><pubDate>Sun, 30 Jun 2024 05:56:38 GMT</pubDate></item><item><title><![CDATA[@RestController사용하는 상황에서의 함수형 인터페이스 사용 예제]]></title><description><![CDATA[ 
+ <br><br>스프링에서 @RestController를 사용하는 상황에서 함수형 인터페이스를 활용하는 예제를 만들어보겠습니다. 이 예제에서는 함수형 인터페이스를 사용하여 요청을 처리하는 로직을 분리하고, 이를 @RestController에서 사용하도록 구성합니다.<br><br>먼저, 요청을 처리하는 함수형 인터페이스를 정의합니다.<br>@FunctionalInterface
+public interface RequestProcessor {
+    String process(String input);
+}
+복사<br><br>이 함수형 인터페이스를 구현하는 클래스를 정의하고, @Component 어노테이션을 붙여 스프링 빈으로 등록합니다.<br>import org.springframework.stereotype.Component;
+
+@Component
+public class UpperCaseProcessor implements RequestProcessor {
+    @Override
+    public String process(String input) {
+        return input.toUpperCase();
+    }
+}
+복사<br><br>컨트롤러 클래스에서 함수형 인터페이스를 주입받아 사용합니다.<br>import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class MyController {
+
+    private final RequestProcessor requestProcessor;
+
+    @Autowired
+    public MyController(RequestProcessor requestProcessor) {
+        this.requestProcessor = requestProcessor;
+    }
+
+    @GetMapping("/process")
+    public String process(@RequestParam String input) {
+        return requestProcessor.process(input);
+    }
+}
+복사<br><br>스프링 부트 애플리케이션 클래스를 정의하여 애플리케이션을 실행합니다.<br>import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+복사<br><br>
+<br>RequestProcessor: 함수형 인터페이스 정의
+<br>UpperCaseProcessor: RequestProcessor 인터페이스를 구현하고 @Component로 등록
+<br>MyController: @RestController로 정의하고, RequestProcessor를 주입받아 사용
+<br>Application: 스프링 부트 애플리케이션 클래스
+<br><br><br>@FunctionalInterface
+public interface RequestProcessor {
+    String process(String input);
+}
+복사<br><br>import org.springframework.stereotype.Component;
+
+@Component
+public class UpperCaseProcessor implements RequestProcessor {
+    @Override
+    public String process(String input) {
+        return input.toUpperCase();
+    }
+}
+복사<br><br>import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class MyController {
+
+    private final RequestProcessor requestProcessor;
+
+    @Autowired
+    public MyController(RequestProcessor requestProcessor) {
+        this.requestProcessor = requestProcessor;
+    }
+
+    @GetMapping("/process")
+    public String process(@RequestParam String input) {
+        return requestProcessor.process(input);
+    }
+}
+복사<br><br>import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+복사<br><br>애플리케이션을 실행한 후 브라우저에서 다음 URL을 호출하면:<br>http://localhost:8080/process?input=hello
+복사<br>다음과 같은 응답이 반환됩니다:<br>HELLO
+복사<br>이 예제는 @RestController에서 함수형 인터페이스를 사용하여 요청을 처리하는 로직을 분리하고, 이를 스프링 빈으로 주입받아 사용하는 방법을 보여줍니다.]]></description><link>&lt;4&gt;궁금증/함수형인터페이스입문.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/함수형인터페이스입문.md</guid><pubDate>Sun, 30 Jun 2024 05:54:55 GMT</pubDate></item><item><title><![CDATA[행 수준 락(row-level locking)이란]]></title><description><![CDATA[ 
+ <br><br>행 수준 락(row-level locking)은 데이터베이스에서 동시성 제어를 위해 사용되는 기법 중 하나로, 데이터베이스의 테이블에서 특정 행(row) 단위로 락을 설정하는 것을 말합니다. 이는 동시성 제어와 데이터 무결성을 유지하면서도 높은 성능을 제공하기 위해 중요한 역할을 합니다. 행 수준 락은 특히 InnoDB와 같은 트랜잭션을 지원하는 스토리지 엔진에서 사용됩니다.<br><br>
+<br>
+정밀한 락킹: 행 수준 락은 테이블의 특정 행에만 락을 설정하기 때문에, 다른 행들은 동시에 접근하고 수정할 수 있습니다. 이는 테이블 수준 락(table-level locking)에 비해 훨씬 더 세밀한 락킹 메커니즘입니다.
+
+<br>
+높은 동시성: 여러 사용자가 동시에 데이터베이스를 읽고 쓸 수 있도록 해줍니다. 예를 들어, 한 사용자가 특정 행을 수정하고 있는 동안에도 다른 사용자는 다른 행을 자유롭게 수정할 수 있습니다.
+
+<br>
+데드락 가능성: 세밀한 락킹으로 인해 데드락(deadlock)이 발생할 가능성이 있습니다. 데드락은 두 개 이상의 트랜잭션이 서로 상대방의 락이 해제되기를 기다리는 상황입니다. 데이터베이스 시스템은 데드락을 감지하고 해결하기 위해 트랜잭션을 롤백하는 등의 방법을 사용합니다.
+
+<br><br>행 수준 락은 주로 다음과 같은 경우에 사용됩니다:<br>
+<br>트랜잭션 격리 수준: 트랜잭션이 동시에 실행되더라도 일관된 데이터를 보장하기 위해 다양한 격리 수준(isolation level)이 제공됩니다. 대표적인 격리 수준으로는 READ COMMITTED, REPEATABLE READ, SERIALIZABLE 등이 있습니다. 이 격리 수준은 행 수준 락을 통해 구현됩니다.
+<br>다중 사용자 환경: 많은 사용자가 동시에 데이터베이스에 접근하여 데이터를 수정하는 경우, 행 수준 락은 성능 저하를 최소화하면서 데이터 무결성을 유지합니다.
+<br><br>다음은 InnoDB 스토리지 엔진을 사용하는 MySQL 데이터베이스에서 행 수준 락을 사용하는 예시입니다:<br>-- 트랜잭션 시작
+START TRANSACTION;
+
+-- 특정 행에 대한 업데이트 쿼리 (이 행에 대한 행 수준 락이 설정됨)
+UPDATE employees SET salary = salary + 1000 WHERE employee_id = 123;
+
+-- 트랜잭션 커밋
+COMMIT;
+복사<br>위의 예시에서, employee_id가 123인 행은 트랜잭션이 완료될 때까지 다른 트랜잭션에서 수정할 수 없습니다. 다른 트랜잭션은 이 행에 접근할 수 없으므로 데이터 무결성이 유지됩니다.<br><br>행 수준 락은 데이터베이스 관리 시스템에서 중요한 동시성 제어 메커니즘으로, 트랜잭션이 서로 영향을 미치지 않도록 하면서도 높은 성능을 제공하는 데 필수적입니다. InnoDB와 같은 스토리지 엔진에서 행 수준 락을 사용하면, 복잡한 트랜잭션 처리와 다중 사용자 환경에서도 데이터 무결성을 유지하면서 효율적으로 데이터를 관리할 수 있습니다.]]></description><link>&lt;4&gt;궁금증/행-수준-락.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/행-수준-락.md</guid><pubDate>Wed, 22 May 2024 06:47:31 GMT</pubDate></item><item><title><![CDATA[헷갈리는 톰캣과 서블릿]]></title><description><![CDATA[ 
+ <br>]]></description><link>&lt;4&gt;궁금증/헷갈리는-톰캣-서블릿.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/헷갈리는-톰캣-서블릿.md</guid><pubDate>Wed, 12 Jun 2024 11:56:14 GMT</pubDate></item><item><title><![CDATA[API호출을 줄이면  구체적으로 뭐가 좋은걸까]]></title><description><![CDATA[ 
+ <br><br>
+<br>서버 부하 감소: API를 적게 호출하면 공공기관 또는 제공업체의 서버 부하를 줄일 수 있습니다. 더 적은 요청은 서버 리소스를 덜 소모하고, 그 결과로 더 적은 전력을 소비하며, 이는 환경에 긍정적인 영향을 미칠 수 있습니다.
+<br>데이터 전송 감소: API 요청은 데이터를 전송하고, 이는 네트워크 대역폭을 소비합니다. 더 적은 API 호출은 총 데이터 전송량을 감소시키고, 결과적으로 네트워크의 부하를 줄일 수 있습니다. 이는 에너지 소비를 줄일 수 있으며, 더 나은 네트워크 성능을 제공할 수 있습니다.
+<br>서비스 가용성 향상: 더 적은 API 요청은 공공기관 또는 제공업체의 서비스 가용성을 향상시킬 수 있습니다. 요청이 줄어들면 서버는 더 잘 처리될 것이며, 이로 인해 서비스의 신뢰성이 향상될 수 있습니다.
+<br>비용 절감: 몇몇 API는 사용량에 따라 비용을 부과할 수 있습니다. 따라서 더 적은 호출을 하면 비용을 절감할 수 있습니다. 이는 공공기관이나 개발자에게 경제적 이점을 제공할 수 있습니다.
+<br>실시간 정보가 필요하지 않으면 캐시같은 수단으로 호출을 줄이는건 매우 바람직하군.<br><br>
+<br>chatGPT
+]]></description><link>&lt;4&gt;궁금증/api-호출-줄이면좋은점.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/api-호출-줄이면좋은점.md</guid><pubDate>Wed, 12 Jun 2024 12:01:11 GMT</pubDate></item><item><title><![CDATA[CGI가 무엇인가?]]></title><description><![CDATA[ 
+ <br>]]></description><link>&lt;4&gt;궁금증/cgi란.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/CGI란.md</guid><pubDate>Wed, 12 Jun 2024 11:55:39 GMT</pubDate></item><item><title><![CDATA[DB에서 해시인덱스 사용 가정, 하지만 어떤 키를 검색할때 결국 키에 해당하는 해시값을 선형검색하는거 아닌가?]]></title><description><![CDATA[ 
+ <br><br>해시 인덱스를 사용할 때는 일반적으로 해시 테이블을 사용하여 키를 검색합니다. 해시 테이블은 특정 키를 해당 버킷(bucket)으로 매핑하는 해시 함수(hash function)를 사용합니다. 해시 인덱스를 사용하는 데이터베이스에서 키를 검색하는 과정은 다음과 같습니다:<br>
+<br>
+해시 함수 적용: 검색하려는 키에 해시 함수를 적용하여 해시 값을 계산합니다. 이 해시 값은 해시 테이블에서 해당 키가 저장된 버킷의 위치를 결정합니다.
+
+<br>
+버킷 접근: 해시 값에 의해 결정된 버킷에 접근합니다. 이 버킷에는 동일한 해시 값을 가진 키-값 쌍들이 저장되어 있습니다.
+
+<br>
+버킷 내 검색: 버킷 내에서 해당 키를 선형 검색합니다. 이 과정에서 같은 해시 값을 가진 다른 키들과 비교하게 됩니다. 일반적으로 버킷의 크기가 작기 때문에 이 검색 과정은 매우 빠르게 이루어집니다.
+
+<br>즉, 해시 인덱스를 사용하면 전체 데이터베이스를 검색하는 대신, 먼저 해시 함수를 통해 특정 버킷으로 접근한 다음, 버킷 내에서만 키를 선형 검색하면 되므로 검색 효율이 크게 향상됩니다.<br>따라서, 키를 검색할 때 "결국 키에 해당하는 해시값을 선형 검색해야 되는거 아니야?"라는 질문에 대한 답변은:<br>
+<br>네, 버킷 내에서는 선형 검색을 해야 할 수도 있습니다. 하지만, 해시 함수의 사용으로 인해 데이터베이스 전체를 선형 검색하는 것보다 훨씬 더 작은 부분만을 검색하게 되어 효율적입니다. 또한, 적절하게 설계된 해시 함수와 해시 테이블 구조는 이러한 버킷 내 충돌을 최소화하여 검색 성능을 최적화합니다.
+]]></description><link>&lt;4&gt;궁금증/db-해시인덱스-결국선형검색.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/DB-해시인덱스-결국선형검색.md</guid><pubDate>Thu, 13 Jun 2024 04:00:27 GMT</pubDate></item><item><title><![CDATA[Hash Table 기본기]]></title><description><![CDATA[ 
+ <br><br>
+<br>기본기가 있어야 새로운걸 빠르게 습득하는것. 없으면 기본이 되는 패턴을 모르기때문에 모든게 새롭게 보이기 때문에 비효율적!
+<br>비유하자면, 기본적으로 여러 물체들을 분산시켜서 서로 다른 바구니에 넣어 두는것.
+<br>맵 vs 테이블, 테이블은 어떤 바구니에 넣을지 결정. 컴터를 이루는건 숫자임 그래서 해시함수가 유용. 
+<br>문자열, 오브젝트들은 컴퓨터에서 숫자일 뿐이다.
+<br>해시함수(테이블) 핵심: 어떻게 서로 다른 오브젝트의 해시값을다르게 보장?
+<br><br>
+<br><a rel="noopener" class="external-link" href="https://youtu.be/S7vni1hdsZE?si=6CyrdnHB1m3clH0q" target="_blank">https://youtu.be/S7vni1hdsZE?si=6CyrdnHB1m3clH0q</a>
+<br><a rel="noopener" class="external-link" href="https://ko.wikipedia.org/wiki/%ED%95%B4%EC%8B%9C_%ED%85%8C%EC%9D%B4%EB%B8%94#:~:text=%ED%95%B4%EC%8B%9C%20%ED%85%8C%EC%9D%B4%EB%B8%94(hash%20table)%2C,%EC%9E%90%EB%A3%8C%20%EA%B5%AC%EC%A1%B0%EB%A5%BC%20%EC%9D%98%EB%AF%B8%ED%95%9C%EB%8B%A4" target="_blank">https://ko.wikipedia.org/wiki/%ED%95%B4%EC%8B%9C_%ED%85%8C%EC%9D%B4%EB%B8%94#:~:text=%ED%95%B4%EC%8B%9C%20%ED%85%8C%EC%9D%B4%EB%B8%94(hash%20table)%2C,%EC%9E%90%EB%A3%8C%20%EA%B5%AC%EC%A1%B0%EB%A5%BC%20%EC%9D%98%EB%AF%B8%ED%95%9C%EB%8B%A4</a>.
+<br><a rel="noopener" class="external-link" href="https://mangkyu.tistory.com/102" target="_blank">https://mangkyu.tistory.com/102</a>
+]]></description><link>&lt;4&gt;궁금증/hash-table.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/hash-table.md</guid><pubDate>Wed, 22 May 2024 06:53:54 GMT</pubDate></item><item><title><![CDATA[Java에서 관리하는 Thread와 OS에서 관리하는 Thread는 서로 다르다!]]></title><description><![CDATA[ 
+ <br><br>24.02.27<br><br>
+<br>자바 언어의 쓰레드 모델은 JVM 내에서 관리된다. 
+<br>자바 프로그램에서는 java.lang.Thread 클래스나 java.util.concurrent 패키지의 ExecutorService 및 ForkJoinPool 등을 사용하여 쓰레드를 생성하고 관리. 
+<br>자바 쓰레드는 JVM이 제어하며, 자바 프로그래머가 직접 조작할 수 있다.
+<br><br>
+<br>운영 체제는 하드웨어의 프로세서를 효율적으로 활용하기 위해 쓰레드를 생성하고 관리.
+<br>운영 체제 쓰레드는 주로 커널 모드에서 실행되며, 운영 체제가 직접 관리.
+<br>대부분의 운영 체제는 쓰레드를 생성하고 관리하기 위한 시스템 콜을 제공하여 다양한 작업을 수행.
+<br><br><a rel="noopener" class="external-link" href="https://www.geeksforgeeks.org/difference-between-java-threads-and-os-threads/" target="_blank">https://www.geeksforgeeks.org/difference-between-java-threads-and-os-threads/</a>]]></description><link>&lt;4&gt;궁금증/java에서-관리하는-thread와-os에서-관리하는-thread.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/Java에서-관리하는-Thread와-OS에서-관리하는-Thread.md</guid><pubDate>Wed, 22 May 2024 06:54:17 GMT</pubDate></item><item><title><![CDATA[jdbc와 mysql은 어떻게 연결이 되고 어떤방식으로 서로 통신하는가?]]></title><description><![CDATA[ 
+ <br><br>JDBC(Java Database Connectivity)는 자바 프로그램에서 데이터베이스와 상호작용하기 위한 표준 API입니다. JDBC를 사용하여 자바 애플리케이션이 MySQL 데이터베이스와 연결되고 통신하는 방식에 대해 설명하겠습니다.<br><br><br>자바 애플리케이션에서 MySQL 데이터베이스와 연결하려면 먼저 MySQL JDBC 드라이버를 로드해야 합니다. 이는 Class.forName 메서드를 사용하여 수행됩니다.<br>Class.forName("com.mysql.cj.jdbc.Driver");
+복사<br><br>드라이버를 로드한 후, DriverManager를 사용하여 데이터베이스에 연결합니다. 이때 데이터베이스 URL, 사용자 이름 및 비밀번호가 필요합니다.<br>Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/mydatabase", "username", "password");
+복사<br><br><br>연결이 설정되면 Statement 객체를 사용하여 SQL 쿼리를 실행할 수 있습니다.<br>Statement statement = connection.createStatement();
+ResultSet resultSet = statement.executeQuery("SELECT * FROM mytable");
+복사<br><br>쿼리가 실행되면 결과는 ResultSet 객체를 통해 반환됩니다. 이를 사용하여 결과를 처리합니다.<br>while (resultSet.next()) {
+    int id = resultSet.getInt("id");
+    String name = resultSet.getString("name");
+    // 처리 로직
+}
+복사<br><br>JDBC와 MySQL이 통신하는 방식은 클라이언트-서버 모델을 따릅니다. 자바 애플리케이션과 MySQL 데이터베이스 서버는 서로 다른 프로세스에서 실행되며, 네트워크를 통해 통신합니다. 통신 과정은 다음과 같습니다:<br>
+<br>TCP/IP 소켓을 통한 연결: 자바 애플리케이션의 JDBC 드라이버는 TCP/IP 소켓을 사용하여 MySQL 서버에 연결합니다. 연결이 설정되면 클라이언트와 서버는 소켓을 통해 데이터 패킷을 주고받습니다.
+<br>프로토콜 사용: MySQL은 클라이언트-서버 프로토콜을 사용하여 쿼리를 전송하고 응답을 받습니다. JDBC 드라이버는 SQL 쿼리를 MySQL 서버가 이해할 수 있는 형식으로 변환하여 전송합니다. 서버는 쿼리를 처리한 후 결과를 클라이언트로 반환합니다.
+<br><br>
+<br>JDBC 드라이버 로드: 자바 애플리케이션은 MySQL JDBC 드라이버를 로드합니다.
+<br>데이터베이스 연결 설정: DriverManager.getConnection을 통해 데이터베이스에 연결합니다.
+<br>SQL 쿼리 전송 및 결과 처리: Statement 객체를 사용하여 SQL 쿼리를 실행하고, ResultSet 객체로 결과를 처리합니다.
+<br>프로세스 간 통신: 자바 애플리케이션과 MySQL 서버는 TCP/IP 소켓을 통해 통신하며, MySQL 프로토콜을 사용하여 데이터를 주고받습니다.
+<br>이 과정을 통해 자바 애플리케이션은 MySQL 데이터베이스와 상호작용하며 필요한 데이터를 효율적으로 처리할 수 있습니다.]]></description><link>&lt;4&gt;궁금증/jdbc-mysql-연결-통신방식.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/jdbc-mysql-연결-통신방식.md</guid><pubDate>Wed, 22 May 2024 06:45:15 GMT</pubDate></item><item><title><![CDATA[JVM내의 스레드가 I/O로 blocking일때 JVM이 같이 블로킹 안되는 이유]]></title><description><![CDATA[ 
+ <br><br><br>명품운영체제라는 교재를 읽는데 프로세스내의 한 스레드에서 블로킹 입출력이 발생하면 프로세스 전체가 블록된다고 되어 있었다. 여기서 든 생각이 JVM에서 는 어떻게 되지하는거였는데, 자바의 I/O operations은 모두 non-blockinig 이로 설계되어 있다고한다. 이러니 JVM전체가 block안되는 것!<br>이 문제는 JVM에서의 스레드를 운영체제에서의 프로세스개념으로 치환해서 이해하면 쉽게 이해가간다. <br>항상 느끼는데 용어들이 너무 중복사용되서 혼란한 상황이 많은거 같다.<br><br>When input/output (I/O) occurs in one thread within the Java Virtual Machine (JVM), it typically doesn't block the entire JVM. However, the particular behavior depends on how the I/O operation is handled and the concurrency model used in the application.<br>In general, Java I/O operations are designed to be non-blocking, especially when using classes from the java.nio package, which provides support for non-blocking I/O operations. For example, when reading from a file using java.nio.file.Files, the operation can be non-blocking if you use asynchronous methods such as Files.readAllBytes(Path path, OpenOption... options).<br>If you're using traditional blocking I/O operations, such as those provided by classes in the java.io package (e.g., FileInputStream or FileOutputStream), the thread performing the I/O operation might be blocked until the operation completes. However, other threads within the JVM can continue their execution unaffected.<br>It's essential to understand that a JVM can handle multiple threads concurrently. Therefore, while one thread may be blocked waiting for I/O, other threads can continue executing their tasks.<br>Regarding the comparison with operating system processes, the concept is somewhat similar. In an operating system, when a process performs I/O, it may be blocked, meaning it's waiting for the I/O operation to complete. However, other processes can continue executing independently. Similarly, in a JVM, when a thread performs I/O, it may be blocked, but other threads within the same JVM can continue execution.<br>So, to answer your question directly: No, the entire JVM is not necessarily blocked when input/output occurs in one thread within the JVM. The impact of I/O operations depends on the concurrency model and the specific I/O operations being performed.]]></description><link>&lt;4&gt;궁금증/jvm의-스레드가-블로킹상태면-jvm프로세스는-어떻게되지.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/jvm의-스레드가-블로킹상태면-jvm프로세스는-어떻게되지.md</guid><pubDate>Wed, 22 May 2024 06:54:11 GMT</pubDate></item><item><title><![CDATA[JWT 기초]]></title><description><![CDATA[ 
+ <br><br>
+<br>
+Json Web Token = JWT
+
+<br>
+편지 역할
+
+<br>
+Header, Payload, Signature 이것들을 base64로 인코딩
+
+<br>
+사용처: Authentication, Information Exchange, Authorization, Single Sign-On, Server-to Server communication
+
+<br>
+쿠키 기반 인증 vs JWT 기반 인증
+
+<br>
+DB에 부담을 덜어준다. DB에 덜 접속해도 되니 빠르다. 
+
+<br>
+서버에 Signature가 존재하고 클라이언트가 서버에 인증을 요청하면 존재하는 Signature와 수신된 header,payload를 사용해 생성된 Signature을 비교함!
+
+<br>
+Header: JWT의 header에는 두 가지 정보가 포함됩니다. 첫째, 토큰의 타입을 나타내는 "typ" (예: "JWT")과 둘째, 사용된 해싱 알고리즘을 나타내는 "alg" (예: "HS256" 또는 "RS256")이 포함됩니다.
+
+<br>
+Payload: JWT의 payload에는 클레임(claim)이 포함됩니다. 클레임은 토큰에 담길 정보들을 말하며, 세 가지 타입으로 나뉩니다: registered, public, private 클레임이며, 이들은 토큰에 대한 메타데이터, 사용자 정보 등을 포함합니다.
+
+<br>
+Signature: 서명은 header와 payload를 합친 후, 이를 비밀 키(secret key)나 개인 키(private key)를 사용하여 해싱한 값입니다. 이 서명은 토큰이 변경되지 않았음을 확인하고, 발행자가 인증되었음을 보장합니다.
+
+<br>
+서버에는 JWT의 header에 알고리즘 정보가 포함되어 있고, 이 알고리즘에 따라 서명이 생성되어 있습니다. 이 서명을 사용하여 토큰의 무결성을 확인할 수 있습니다
+
+<br><br>
+<br><a rel="noopener" class="external-link" href="https://youtu.be/36lpDzQzVXs?si=fqFpB8ZqEcRCINzR" target="_blank">https://youtu.be/36lpDzQzVXs?si=fqFpB8ZqEcRCINzR</a>
+]]></description><link>&lt;4&gt;궁금증/jwt.html</link><guid isPermaLink="false">&lt;4&gt;궁금증/JWT.md</guid><pubDate>Wed, 22 May 2024 06:54:55 GMT</pubDate></item></channel></rss>
